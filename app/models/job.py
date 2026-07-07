@@ -1,7 +1,7 @@
 """Modelo JobColeta: status de uma coleta assíncrona disparada por busca."""
 
 from datetime import datetime
-from enum import StrEnum
+from enum import Enum
 
 from sqlalchemy import DateTime, ForeignKey, String, Text, func
 from sqlalchemy.orm import Mapped, mapped_column
@@ -9,7 +9,8 @@ from sqlalchemy.orm import Mapped, mapped_column
 from app.core.db import Base
 
 
-class StatusJob(StrEnum):
+class StatusJob(str, Enum):
+    """Equivalente a StrEnum (3.11+), mas compatível com Python 3.10+."""
     QUEUED = "queued"
     RUNNING = "running"
     DONE = "done"

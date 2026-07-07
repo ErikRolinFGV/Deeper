@@ -207,12 +207,12 @@ API disponível em `http://localhost:8000`. Documentação automática em `/docs
 - [x] Arquitetura definida
 - [x] Stack escolhida
 - [x] Decisões registradas
-- [ ] Estrutura de pastas criada
-- [ ] Modelo de dados implementado (SQLAlchemy + Alembic)
-- [ ] Coletores implementados
-- [ ] Camada LLM implementada
-- [ ] API FastAPI funcional
-- [ ] Worker RQ orquestrando jobs
+- [x] Estrutura de pastas criada
+- [x] Modelo de dados implementado (SQLAlchemy + Alembic, migration inicial `36e4c0a56103`)
+- [ ] Coletores implementados (SerpAPI pronto; Apify parcial; Crunchbase, GDELT, B3 e Receita são stubs)
+- [ ] Camada LLM implementada (extrator pronto; sintetizador e inferidor de relações são stubs)
+- [x] API FastAPI funcional (`/busca`, `/perfil`, `/grafo`, `/job` implementados e testados)
+- [ ] Worker RQ orquestrando jobs (esqueleto criado; pipeline de coleta é TODO)
 - [ ] Frontend (definição posterior)
 
 ---
