@@ -25,8 +25,10 @@ from app import models  # noqa: F401 — registra os modelos no metadata
 # Config do Alembic (lê alembic.ini)
 config = context.config
 
-# Injeta a URL do banco vinda do .env via Settings
-config.set_main_option("sqlalchemy.url", settings.DATABASE_URL)
+# Injeta a URL do banco vinda do .env via Settings.
+# O % vira %% porque o configparser do alembic.ini trata % como
+# caractere de interpolação (necessário para senhas URL-encoded).
+config.set_main_option("sqlalchemy.url", settings.DATABASE_URL.replace("%", "%%"))
 
 # Logging
 if config.config_file_name is not None:
