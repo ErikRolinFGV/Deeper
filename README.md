@@ -22,7 +22,7 @@ O backend está dividido em cinco camadas com responsabilidades isoladas:
 [Coleta] → [Processamento LLM] → [Armazenamento] → [API] → [Frontend]
 ```
 
-**Coleta.** Combinação de serviços terceirizados (Apify para LinkedIn) e APIs oficiais/abertas (Crunchbase, SerpAPI, GDELT, B3, Receita Federal). Cada coletor é um módulo independente em `app/services/collectors/`.
+**Coleta.** Combinação de serviços terceirizados (Apify para LinkedIn) e APIs oficiais/abertas (SerpAPI, GDELT, B3, Receita Federal). Cada coletor é um módulo independente em `app/services/collectors/`. O coletor principal (SerpAPI) restringe buscas aos 10 maiores portais de imprensa BR, filtra páginas-índice/comentários e extrai data de publicação da própria URL. *(Crunchbase foi cortado do escopo em jul/2026: a API deixou de ter acesso self-service e exige licença enterprise.)*
 
 **Processamento.** Três tipos de chamada à API da Anthropic (Claude Sonnet):
 - *Extrator estruturado* — texto bruto vira JSON validado por Pydantic.
@@ -105,7 +105,11 @@ CEO_Mais/
 │   └── workers/
 │       └── busca_worker.py        # Job RQ que orquestra coleta
 ├── migrations/                    # Alembic versions
-└── tests/
+├── scripts/
+│   ├── checar_instalacao.bat      # Diagnóstico: Postgres/Memurai instalados e rodando?
+│   ├── checar_ambiente.py         # Valida .env, banco, Redis e chaves de API
+│   └── rodar_worker.py            # Runner do worker compatível com Windows
+└── tests/                         # 26 testes (pytest, sem dependências externas)
 ```
 
 ---
@@ -124,16 +128,20 @@ CEO_Mais/
 
 ---
 
-## Fluxo de uma busca completa
+## Fluxo de uma busca completa (implementado)
 
-1. Analista da FSB envia `POST /busca` com `{"nome": "Eduardo Bartolomeo"}`.
-2. API verifica se perfil existe em cache fresco (< 7 dias). Se sim, retorna direto.
+1. Analista da FSB envia `POST /busca` com `{"nome": "Eduardo Bartolomeo"}` (ou `force_refresh: true` para ignorar o cache).
+2. API verifica se perfil existe em cache fresco (< 7 dias). Se sim, retorna `{pessoa_id, cache_hit: true}` direto.
 3. Caso contrário, cria `JobColeta` e enfileira no Redis. Retorna `{job_id}`.
-4. Worker RQ dispara **em paralelo**: Apify (LinkedIn), Crunchbase (carreira), SerpAPI (imprensa BR), GDELT (eventos globais), B3 (se aplicável), Receita (quadros societários).
-5. Cada resposta bruta vai para o *extrator LLM*, que devolve JSON estruturado (eventos, empresas, pessoas mencionadas, sentimento, temas).
-6. Persistência: `Pessoa`, `Cargo`, `Empresa`, `Evento`, `Mencao` são populados. Para cada pessoa co-mencionada, uma aresta em `Relacao` é criada ou reforçada.
-7. Última chamada ao *sintetizador LLM*: gera o briefing executivo em português a partir do conjunto consolidado.
-8. Job marcado como `done`. Frontend, que faz polling em `GET /job/{id}`, consulta `GET /perfil/{id}` e `GET /grafo/{id}` para renderização.
+4. Worker localiza/cria a `Pessoa`, coleta menções via SerpAPI (deduplicadas por URL) e, se houver URL de LinkedIn cadastrada, enriquece o perfil via Apify.
+5. **Higienização** (sem custo de LLM): menções antigas de páginas-índice são removidas e datas nulas preenchidas a partir da URL.
+6. **Auto-recuperação**: menções de execuções anteriores que ficaram sem extração (falha de API no meio do job) voltam para a fila de processamento.
+7. Cada menção passa pelo *extrator LLM* (tool_use com schema forçado): sentimento, temas, empresas, eventos públicos nomeados, pessoas co-mencionadas e cargo do alvo.
+8. Persistência: `Mencao`, `Empresa`, `Evento` populados; para cada pessoa co-mencionada, aresta em `Relacao` criada ou reforçada (+1 peso, evidência anexada).
+9. *Sintetizador LLM* gera o briefing executivo de 3 parágrafos em português, instruído a não especular além dos dados.
+10. Job marcado como `done` com `pessoa_id` preenchido. Cliente consulta `GET /perfil/{pessoa_id}` e `GET /grafo/{pessoa_id}`.
+
+Custo por busca nova: ~10 chamadas de extração + 1 de síntese (centavos de dólar). Cada coletor e chamada LLM é tolerante a falha — fonte fora do ar degrada o dossiê, não derruba o job.
 
 ---
 
@@ -143,15 +151,15 @@ Todas configuradas via `.env` na raiz do projeto.
 
 | Variável                | Serviço                           | Custo aproximado            |
 |-------------------------|-----------------------------------|-----------------------------|
-| `ANTHROPIC_API_KEY`     | Claude Sonnet                     | $0.15–0.25 por busca nova   |
-| `APIFY_TOKEN`           | Scraping LinkedIn                 | ~$5–10 por 1000 perfis      |
-| `SERPAPI_KEY`           | Google search programático        | ~$50 por 5000 buscas        |
-| `CRUNCHBASE_API_KEY`    | Carreira corporativa              | ~$49/mês plano básico       |
-| `JWT_SECRET`            | Auth interna                      | —                           |
+| `ANTHROPIC_API_KEY`     | Claude Sonnet                     | centavos por busca nova     |
+| `APIFY_TOKEN`           | Scraping LinkedIn                 | free tier ($5/mês) cobre testes; ~$3–10 por 1000 perfis |
+| `SERPAPI_KEY`           | Google search programático        | free tier (250 buscas/mês) cobre testes |
+| `CRUNCHBASE_API_KEY`    | *(fora do escopo — usar valor placeholder)* | —          |
+| `JWT_SECRET`            | Auth interna (gerar com `secrets.token_urlsafe`) | —          |
 | `DATABASE_URL`          | Postgres local                    | —                           |
-| `REDIS_URL`             | Redis local                       | —                           |
+| `REDIS_URL`             | Redis local (Memurai no Windows)  | —                           |
 
-GDELT, B3 e Receita são gratuitos. Estimativa total para uso de MVP demonstrável: **$50–100/mês**, cobrindo dezenas de buscas únicas por dia (cache derruba custo de buscas repetidas).
+GDELT, B3 e Receita são gratuitos e não exigem chave. Fase de testes: praticamente só o crédito Anthropic (US$ 5–10). **Atenção**: se a senha do Postgres tiver caracteres especiais (`@`, `$`, `%`...), escreva-os URL-encoded no `DATABASE_URL` (ex: `@` → `%40`, `$` → `%24`).
 
 ---
 
@@ -164,9 +172,9 @@ Pré-requisitos:
 - Redis rodando localmente (via WSL, Memurai ou similar)
 - Contas criadas nos serviços listados acima
 
-Passos resumidos (a serem detalhados quando o projeto for criado):
+Passos:
 
-```bash
+```powershell
 # Criar virtualenv e instalar dependências
 python -m venv .venv
 .venv\Scripts\activate
@@ -176,18 +184,31 @@ pip install -r requirements.txt
 copy .env.example .env
 # Editar .env com as chaves reais
 
-# Criar banco e rodar migrations
-createdb fsb_executive_intelligence
+# Conferir instalação de Postgres/Memurai (duplo clique também funciona)
+scripts\checar_instalacao.bat
+
+# Criar banco (no SQL Shell/psql): CREATE DATABASE fsb_executive_intelligence;
+
+# Validar ambiente completo: banco, Redis e as 3 chaves de API
+python scripts\checar_ambiente.py
+
+# Criar as tabelas
 alembic upgrade head
 
-# Subir servidor FastAPI
+# Terminal 1 — API
 uvicorn app.main:app --reload
 
-# Em outro terminal, subir worker
-rq worker --url $REDIS_URL
+# Terminal 2 — worker (runner próprio: o `rq worker` padrão usa fork e não roda no Windows)
+python scripts\rodar_worker.py
 ```
 
-API disponível em `http://localhost:8000`. Documentação automática em `/docs`.
+API disponível em `http://localhost:8000`. Documentação interativa (Swagger) em `/docs`.
+
+### Regras de operação
+
+- **Mudou código → reinicie o worker** (Ctrl+C e rodar de novo). O `--reload` do uvicorn só cobre a API; o worker não se atualiza sozinho.
+- **Um worker por vez.** Workers antigos esquecidos em outros terminais disputam a fila e processam jobs com código velho. O worker loga `pipeline vAAAA-MM-DD.N` no startup e em cada job — se a versão no log não bater com o código, há processo velho vivo.
+- Rodar os testes: `pytest` (26 testes; usam SQLite em memória e mocks — não gastam API nem exigem Postgres/Redis).
 
 ---
 
@@ -204,25 +225,30 @@ API disponível em `http://localhost:8000`. Documentação automática em `/docs
 
 ## Status atual
 
-- [x] Arquitetura definida
-- [x] Stack escolhida
-- [x] Decisões registradas
-- [x] Estrutura de pastas criada
+Backend em **~80%**, validado ponta a ponta com buscas reais (dossiês de executivos da Vale e Coca-Cola gerados com sucesso).
+
+- [x] Arquitetura definida, stack escolhida, decisões registradas
+- [x] Ambiente local validado (Postgres 18, Memurai, chaves de API — ver `scripts/checar_ambiente.py`)
 - [x] Modelo de dados implementado (SQLAlchemy + Alembic, migration inicial `36e4c0a56103`)
-- [ ] Coletores implementados (SerpAPI pronto; Apify parcial; Crunchbase, GDELT, B3 e Receita são stubs)
-- [ ] Camada LLM implementada (extrator pronto; sintetizador e inferidor de relações são stubs)
-- [x] API FastAPI funcional (`/busca`, `/perfil`, `/grafo`, `/job` implementados e testados)
-- [ ] Worker RQ orquestrando jobs (esqueleto criado; pipeline de coleta é TODO)
+- [x] API FastAPI funcional (`/busca`, `/perfil`, `/grafo`, `/job`)
+- [x] Worker RQ orquestrando o pipeline completo (coleta → extração → persistência → grafo → briefing), com higienização e auto-recuperação
+- [x] Camada LLM: extrator estruturado (tool_use) e sintetizador de briefing prontos
+- [x] Coletor SerpAPI completo (10 portais BR, filtros de índice, datas via URL); Apify parcial (exige URL de LinkedIn conhecida)
+- [x] 26 testes automatizados (API + worker + coletor)
+- [ ] Coletores GDELT, B3 e Receita (stubs) — Crunchbase cortado do escopo
+- [ ] Inferidor de relações LLM (stub); grafo hoje usa só co-menção
+- [ ] Autenticação JWT plugada nos endpoints (módulo pronto em `core/security.py`, não aplicado)
 - [ ] Frontend (definição posterior)
 
 ---
 
-## Próximos passos imediatos
+## Próximos passos
 
-1. Revisão deste README com Erik e, em seguida, com a equipe FSB.
-2. Estruturação inicial de pastas e `requirements.txt`.
-3. Configuração das contas nos serviços externos.
-4. Implementação iterativa por camada, começando pelos modelos de dados.
+1. **Frontend demonstrável** — busca + dossiê + grafo visual (Cytoscape.js); o backend já entrega JSON pronto para renderização. Candidato a próxima sessão.
+2. Coletores adicionais: GDELT (eventos globais), BrasilAPI/Receita (quadros societários — conexões formais para o grafo), B3.
+3. Inferidor de relações LLM para qualificar arestas além da co-menção.
+4. Descoberta automática de URL de LinkedIn pelo nome (destrava o enriquecimento via Apify).
+5. Plugar autenticação JWT nos endpoints antes de qualquer demo externa.
 
 ---
 
