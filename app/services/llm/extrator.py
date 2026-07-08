@@ -23,9 +23,21 @@ class EntidadesExtraidas(BaseModel):
 
     eventos: list[str] = Field(
         default_factory=list,
-        description="Eventos públicos mencionados (conferências, fóruns, encontros corporativos)",
+        description=(
+            "APENAS eventos públicos nomeados: conferências, fóruns, premiações, "
+            "painéis (ex: Fórum de Davos, Brazil Conference, Lide). "
+            "NÃO incluir acontecimentos noticiosos (renovação de contrato, anúncio "
+            "de sucessão, demissão) nem datas comemorativas (Natal, aniversários)."
+        ),
     )
     empresas_mencionadas: list[str] = Field(default_factory=list)
+    cargo_pessoa_alvo: str | None = Field(
+        default=None,
+        description=(
+            "Cargo atual da pessoa-alvo se o texto informar, sempre incluindo a "
+            "organização quando identificável (ex: 'CEO da Vale', não apenas 'CEO')"
+        ),
+    )
     pessoas_mencionadas: list[str] = Field(
         default_factory=list,
         description="Outras pessoas citadas além da pessoa-alvo da análise",
@@ -63,12 +75,23 @@ EXTRATOR_TOOL: dict[str, Any] = {
             "eventos": {
                 "type": "array",
                 "items": {"type": "string"},
-                "description": "Eventos públicos mencionados",
+                "description": (
+                    "Apenas eventos públicos nomeados (conferências, fóruns, "
+                    "premiações). Nunca acontecimentos noticiosos nem datas "
+                    "comemorativas."
+                ),
             },
             "empresas_mencionadas": {
                 "type": "array",
                 "items": {"type": "string"},
                 "description": "Nomes próprios de companhias citadas",
+            },
+            "cargo_pessoa_alvo": {
+                "type": ["string", "null"],
+                "description": (
+                    "Cargo atual da pessoa-alvo, se o texto informar, com a "
+                    "organização (ex: 'CEO da Vale', não apenas 'CEO')"
+                ),
             },
             "pessoas_mencionadas": {
                 "type": "array",
@@ -116,6 +139,10 @@ Você receberá um texto sobre um executivo brasileiro (perfil profissional, art
 
 Diretrizes:
 - Seja preciso. Em caso de dúvida, prefira omitir a inventar.
+- `eventos`: somente eventos públicos com nome próprio (Fórum de Davos, Lide, Web Summit).
+  O fato noticiado em si (renovação de contrato, anúncio de CEO, demissão) NÃO é evento.
+  Datas comemorativas (Natal, aniversário da empresa) também não.
+- `cargo_pessoa_alvo`: cargo atual da pessoa-alvo se o texto informar; caso contrário null.
 - `pessoas_mencionadas`: apenas nomes de outras pessoas além da pessoa-alvo da análise.
 - `empresas_mencionadas`: nomes próprios de companhias, não setores genéricos como "varejo" ou "tecnologia".
 - `datas`: use AAAA-MM-DD quando puder inferir o ano com segurança; caso contrário, omita.

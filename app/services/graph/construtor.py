@@ -37,6 +37,10 @@ def reforcar_relacao(
             evidencias=[evidencia],
         )
         db.add(rel)
+        # Flush imediato: com autoflush desligado na sessão, sem isso uma
+        # segunda chamada no mesmo lote não encontraria esta aresta e criaria
+        # uma duplicata, violando uq_relacao_tripla.
+        db.flush()
         logger.debug(f"Nova relação {tipo}: {pessoa_a_id} <-> {pessoa_b_id}")
     else:
         rel.peso += 1
