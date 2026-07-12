@@ -17,21 +17,29 @@ import re
 from datetime import date, datetime, timezone
 
 from loguru import logger
-from sqlalchemy import select
+from sqlalchemy import or_, select
 from sqlalchemy.orm import Session
 
 from app.api.busca import gerar_slug
+from app.core.config import settings
 from app.core.db import SessionLocal
+from app.models.cargo import Cargo
 from app.models.empresa import Empresa
 from app.models.evento import Evento, evento_participante
 from app.models.job import JobColeta, StatusJob
 from app.models.mencao import Mencao
 from app.models.pessoa import Pessoa
-from app.services.collectors.apify_linkedin import coletar_perfil_linkedin
+from app.models.relacao import Relacao
+from app.services.collectors.apify_linkedin import (
+    coletar_perfil_linkedin,
+    descobrir_linkedin_url,
+    normalizar_perfil,
+)
 from app.services.collectors.serpapi_news import (
     _data_da_url,
     _eh_pagina_indice,
     buscar_mencoes,
+    limpar_url,
 )
 from app.services.graph.construtor import reforcar_relacao
 from app.services.llm.extrator import extrair
@@ -39,7 +47,7 @@ from app.services.llm.sintetizador import sintetizar
 
 # Versão do pipeline — aparece no log de cada job. Se o log mostrar uma
 # versão antiga, o processo do worker precisa ser reiniciado.
-PIPELINE_VERSAO = "2026-07-08.1"
+PIPELINE_VERSAO = "2026-07-12.1"
 
 # Limites de MVP: controlam custo de API por busca.
 MAX_MENCOES = 15          # resultados pedidos ao SerpAPI
@@ -120,7 +128,7 @@ def _persistir_mencoes(db: Session, pessoa: Pessoa, brutas: list[dict]) -> list[
     """Grava menções novas (deduplicadas por URL) e retorna as criadas."""
     novas: list[Mencao] = []
     for item in brutas:
-        url = item.get("url")
+        url = limpar_url(item.get("url") or "")
         if not url:
             continue
         ja_existe = db.scalar(
@@ -145,24 +153,104 @@ def _persistir_mencoes(db: Session, pessoa: Pessoa, brutas: list[dict]) -> list[
 # ---------- etapas do pipeline ----------
 
 
-def _atualizar_com_linkedin(pessoa: Pessoa) -> None:
-    """Enriquece a Pessoa com dados do LinkedIn, se houver URL conhecida."""
+def _persistir_perfil_linkedin(db: Session, pessoa: Pessoa, perfil: dict) -> None:
+    """Grava na ficha e no histórico o perfil já normalizado. Idempotente."""
+    pessoa.nome_completo = pessoa.nome_completo or perfil.get("nome_completo")
+    pessoa.bio = pessoa.bio or perfil.get("sobre")
+    pessoa.foto_url = pessoa.foto_url or perfil.get("foto_url")
+    pessoa.localizacao = pessoa.localizacao or perfil.get("localizacao")
+
+    # Cargo atual: a experiência corrente do LinkedIn é a fonte mais
+    # estruturada que temos — tem prioridade sobre menções de imprensa.
+    atuais = [e for e in perfil.get("experiencias", []) if e.get("atual")]
+    if atuais and atuais[0].get("funcao"):
+        empresa_nome = atuais[0].get("empresa")
+        pessoa.cargo_atual = (
+            f"{atuais[0]['funcao']} — {empresa_nome}" if empresa_nome else atuais[0]["funcao"]
+        )
+    elif not pessoa.cargo_atual and perfil.get("headline"):
+        pessoa.cargo_atual = perfil["headline"]
+
+    # Histórico profissional → Cargo/Empresa (dedup por pessoa+empresa+função)
+    novos = 0
+    for exp in perfil.get("experiencias", []):
+        if not exp.get("empresa") or not exp.get("funcao"):
+            continue
+        empresa = _get_or_create_empresa(db, exp["empresa"])
+        ja_existe = db.scalar(
+            select(Cargo).where(
+                Cargo.pessoa_id == pessoa.id,
+                Cargo.empresa_id == empresa.id,
+                Cargo.funcao == exp["funcao"],
+            )
+        )
+        if ja_existe:
+            ja_existe.inicio = ja_existe.inicio or exp.get("inicio")
+            ja_existe.fim = ja_existe.fim or exp.get("fim")
+            ja_existe.eh_atual = bool(exp.get("atual"))
+            continue
+        db.add(
+            Cargo(
+                pessoa_id=pessoa.id,
+                empresa_id=empresa.id,
+                funcao=exp["funcao"],
+                inicio=exp.get("inicio"),
+                fim=exp.get("fim"),
+                eh_atual=bool(exp.get("atual")),
+            )
+        )
+        novos += 1
+    db.flush()
+    logger.info(f"Pessoa {pessoa.id}: LinkedIn aplicado ({novos} cargos novos)")
+
+
+def _atualizar_com_linkedin(db: Session, pessoa: Pessoa) -> dict | None:
+    """Descobre, coleta e aplica o perfil LinkedIn da pessoa.
+
+    Fluxo: descoberta da URL via SerpAPI (1x, só se desconhecida) →
+    cache TTL (payload bruto salvo em pessoa.linkedin_dados, evita pagar o
+    actor de novo em force_refresh) → coleta Apify → normalização →
+    persistência (ficha + cargos + empresas).
+
+    Retorna o perfil normalizado (para o sintetizador) ou None.
+    """
     if not pessoa.linkedin_url:
-        return
-    perfil = coletar_perfil_linkedin(pessoa.linkedin_url)
-    if not perfil:
-        return
-    pessoa.nome_completo = pessoa.nome_completo or perfil.get("fullName")
-    pessoa.cargo_atual = pessoa.cargo_atual or perfil.get("headline")
-    pessoa.bio = pessoa.bio or perfil.get("summary") or perfil.get("about")
-    pessoa.foto_url = pessoa.foto_url or perfil.get("profilePicture")
-    logger.info(f"Pessoa {pessoa.id}: enriquecida com LinkedIn")
+        pessoa.linkedin_url = descobrir_linkedin_url(pessoa.nome, pessoa.cargo_atual)
+    if not pessoa.linkedin_url:
+        return None
+
+    agora = datetime.now(timezone.utc)
+
+    # Cache: payload fresco não gera nova cobrança no Apify.
+    if pessoa.linkedin_dados and pessoa.linkedin_coletado_em:
+        coletado = pessoa.linkedin_coletado_em
+        if coletado.tzinfo is None:
+            coletado = coletado.replace(tzinfo=timezone.utc)
+        if (agora - coletado).days < settings.LINKEDIN_TTL_DIAS:
+            logger.info(f"Pessoa {pessoa.id}: LinkedIn em cache (TTL), sem recoleta")
+            perfil = normalizar_perfil(pessoa.linkedin_dados)
+            _persistir_perfil_linkedin(db, pessoa, perfil)
+            return perfil
+
+    bruto = coletar_perfil_linkedin(pessoa.linkedin_url)
+    if not bruto:
+        return None
+
+    pessoa.linkedin_dados = bruto
+    pessoa.linkedin_coletado_em = agora
+    perfil = normalizar_perfil(bruto)
+    _persistir_perfil_linkedin(db, pessoa, perfil)
+    return perfil
 
 
 def _processar_mencao(
-    db: Session, pessoa: Pessoa, mencao: Mencao, consolidado: dict
+    db: Session, pessoa: Pessoa, mencao: Mencao, extras: dict
 ) -> None:
-    """Roda o extrator LLM sobre uma menção e persiste o que ele encontrar."""
+    """Roda o extrator LLM sobre uma menção e persiste o que ele encontrar.
+
+    `extras` acumula o que NÃO é persistido em tabela própria (valores
+    monetários, empresas citadas) para entrar no consolidado do sintetizador.
+    """
     texto = "\n".join(filter(None, [mencao.titulo, mencao.texto]))
     if not texto.strip():
         return
@@ -181,7 +269,6 @@ def _processar_mencao(
     # Cargo do alvo: preenche a ficha se ainda estiver vazia.
     if not pessoa.cargo_atual and entidades.cargo_pessoa_alvo:
         pessoa.cargo_atual = entidades.cargo_pessoa_alvo
-        consolidado["cargo_atual"] = pessoa.cargo_atual
 
     evidencia = {"mencao_url": mencao.url, "titulo": mencao.titulo}
 
@@ -198,20 +285,102 @@ def _processar_mencao(
         co_pessoa = _get_or_create_pessoa(db, nome_pessoa)
         reforcar_relacao(db, pessoa.id, co_pessoa.id, "co_mencionado", evidencia)
 
-    consolidado["mencoes"].append(
-        {
-            "fonte": mencao.fonte,
-            "titulo": mencao.titulo,
-            "data": mencao.data_publicacao,
-            "sentimento": entidades.sentimento,
-            "temas": entidades.temas,
+    extras["empresas"].extend(entidades.empresas_mencionadas)
+    extras["valores_monetarios"].extend(entidades.valores_monetarios)
+
+
+def _unicos(itens: list) -> list:
+    """Deduplica preservando a ordem."""
+    return list(dict.fromkeys(itens))
+
+
+def _montar_consolidado(
+    db: Session, pessoa: Pessoa, perfil_linkedin: dict | None, extras: dict
+) -> dict:
+    """Monta o payload do sintetizador a partir do ESTADO COMPLETO do banco.
+
+    Antes o consolidado só continha as menções processadas na execução
+    corrente — se todas já tinham sido extraídas antes, o briefing saía
+    dizendo "sem menções na imprensa" com dezenas delas no banco.
+    """
+    mencoes = db.scalars(
+        select(Mencao).where(
+            Mencao.pessoa_id == pessoa.id, Mencao.sentimento.is_not(None)
+        )
+    ).all()
+    mencoes.sort(key=lambda m: m.data_publicacao or date.min, reverse=True)
+
+    lista_mencoes, temas = [], []
+    for m in mencoes:
+        temas_m = [t for t in (m.temas or "").split(",") if t]
+        temas.extend(temas_m)
+        lista_mencoes.append(
+            {
+                "fonte": m.fonte,
+                "titulo": m.titulo,
+                "data": m.data_publicacao,
+                "sentimento": m.sentimento,
+                "temas": temas_m,
+            }
+        )
+
+    eventos = db.scalars(
+        select(Evento)
+        .join(evento_participante, evento_participante.c.evento_id == Evento.id)
+        .where(evento_participante.c.pessoa_id == pessoa.id)
+    ).all()
+
+    relacoes = db.scalars(
+        select(Relacao).where(
+            or_(Relacao.pessoa_a_id == pessoa.id, Relacao.pessoa_b_id == pessoa.id)
+        )
+    ).all()
+    pessoas_relacionadas = []
+    for rel in relacoes:
+        outro_id = rel.pessoa_b_id if rel.pessoa_a_id == pessoa.id else rel.pessoa_a_id
+        outro = db.get(Pessoa, outro_id)
+        if outro:
+            pessoas_relacionadas.append(
+                {"nome": outro.nome, "tipo": rel.tipo, "forca": rel.peso}
+            )
+    pessoas_relacionadas.sort(key=lambda p: p["forca"], reverse=True)
+
+    cargos = db.scalars(select(Cargo).where(Cargo.pessoa_id == pessoa.id)).all()
+
+    consolidado: dict = {
+        "nome": pessoa.nome,
+        "cargo_atual": pessoa.cargo_atual,
+        "localizacao": pessoa.localizacao,
+        "mencoes": lista_mencoes,
+        "temas": _unicos(temas),
+        "empresas": _unicos(extras.get("empresas", [])),
+        "eventos": _unicos([e.nome for e in eventos]),
+        "valores_monetarios": _unicos(extras.get("valores_monetarios", [])),
+        "pessoas_relacionadas": pessoas_relacionadas[:10],
+        "historico_profissional": [
+            {
+                "funcao": c.funcao,
+                "empresa": c.empresa.nome if c.empresa else None,
+                "inicio": c.inicio,
+                "fim": "atual" if c.eh_atual else c.fim,
+            }
+            for c in cargos
+        ],
+    }
+
+    if perfil_linkedin:
+        consolidado["linkedin"] = {
+            "headline": perfil_linkedin.get("headline"),
+            "localizacao": perfil_linkedin.get("localizacao"),
+            "resumo": (perfil_linkedin.get("sobre") or "")[:600] or None,
+            "seguidores": perfil_linkedin.get("seguidores"),
+            "formacao": [
+                {"instituicao": f.get("instituicao"), "curso": f.get("area") or f.get("grau")}
+                for f in perfil_linkedin.get("formacao", [])[:5]
+            ],
         }
-    )
-    consolidado["temas"].extend(entidades.temas)
-    consolidado["empresas"].extend(entidades.empresas_mencionadas)
-    consolidado["eventos"].extend(entidades.eventos)
-    consolidado["valores_monetarios"].extend(entidades.valores_monetarios)
-    consolidado["pessoas_relacionadas"].extend(entidades.pessoas_mencionadas)
+
+    return consolidado
 
 
 # ---------- entry point ----------
@@ -244,13 +413,39 @@ def executar_busca(job_id: int) -> None:
         logger.info(f"Job {job_id}: {len(novas)} menções novas de {len(brutas)} coletadas")
 
         # Higienização (sem custo de LLM), cobre registros de execuções antigas:
-        # remove menções de páginas-índice/comentários e preenche datas via URL.
+        # remove menções de páginas-índice, normaliza URLs (tracking params),
+        # funde duplicatas da mesma matéria e preenche datas via URL.
+        vistos: dict[str, Mencao] = {}
         for m in db.scalars(select(Mencao).where(Mencao.pessoa_id == pessoa.id)).all():
-            if _eh_pagina_indice(m.url):
+            url_limpa = limpar_url(m.url)
+            if _eh_pagina_indice(url_limpa):
                 db.delete(m)
                 logger.info(f"Job {job_id}: menção índice removida ({m.url[:60]})")
-            elif m.data_publicacao is None:
-                m.data_publicacao = _parse_data(_data_da_url(m.url))
+                continue
+            m.url = url_limpa
+            anterior = vistos.get(url_limpa)
+            if anterior is not None:
+                # Mesma matéria com tracking diferente: mantém a mais completa.
+                manter, apagar = anterior, m
+                if anterior.sentimento is None and m.sentimento is not None:
+                    manter, apagar = m, anterior
+                manter.data_publicacao = manter.data_publicacao or apagar.data_publicacao
+                db.delete(apagar)
+                logger.info(f"Job {job_id}: menção duplicada fundida ({url_limpa[:60]})")
+            vistos[url_limpa] = manter if anterior is not None else m
+            alvo = vistos[url_limpa]
+            if alvo.data_publicacao is None:
+                alvo.data_publicacao = _parse_data(_data_da_url(alvo.url))
+        # Eventos herdados de menções-índice antigas também saem.
+        for evento in db.scalars(select(Evento)).all():
+            if evento.fonte_url and _eh_pagina_indice(evento.fonte_url):
+                db.execute(
+                    evento_participante.delete().where(
+                        evento_participante.c.evento_id == evento.id
+                    )
+                )
+                db.delete(evento)
+                logger.info(f"Job {job_id}: evento de página-índice removido ({evento.nome[:50]})")
         db.commit()
 
         # Auto-recuperação: menções gravadas em execuções anteriores que nunca
@@ -266,31 +461,24 @@ def executar_busca(job_id: int) -> None:
                 f"Job {job_id}: reprocessando {len(pendentes) - len(novas)} menções pendentes de execuções anteriores"
             )
 
-        _atualizar_com_linkedin(pessoa)
+        perfil_linkedin = _atualizar_com_linkedin(db, pessoa)
         db.commit()
 
         # 3. Extração LLM + grafo
-        consolidado: dict = {
-            "nome": pessoa.nome,
-            "cargo_atual": pessoa.cargo_atual,
-            "mencoes": [],
-            "temas": [],
-            "empresas": [],
-            "eventos": [],
-            "valores_monetarios": [],
-            "pessoas_relacionadas": [],
-        }
+        extras: dict = {"empresas": [], "valores_monetarios": []}
         for mencao in pendentes[:MAX_EXTRACOES]:
-            _processar_mencao(db, pessoa, mencao, consolidado)
+            _processar_mencao(db, pessoa, mencao, extras)
         db.commit()
 
-        # 4. Briefing executivo
-        if consolidado["mencoes"]:
+        # 4. Briefing executivo — sintetiza o estado completo do banco
+        # (menções/eventos/relações/cargos de TODAS as execuções, não só desta)
+        consolidado = _montar_consolidado(db, pessoa, perfil_linkedin, extras)
+        if consolidado["mencoes"] or perfil_linkedin:
             briefing = sintetizar(consolidado)
             if briefing:
                 pessoa.briefing = briefing
         else:
-            logger.warning(f"Job {job_id}: sem menções processadas, briefing mantido")
+            logger.warning(f"Job {job_id}: sem menções nem LinkedIn, briefing mantido")
 
         # Marca o perfil como fresco para o cache de /busca
         pessoa.atualizado_em = datetime.now(timezone.utc)

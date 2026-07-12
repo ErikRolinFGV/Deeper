@@ -76,6 +76,7 @@ def preparar(monkeypatch):
     monkeypatch.setattr(busca_worker, "extrair", lambda texto, ctx: EXTRACAO_FALSA)
     monkeypatch.setattr(busca_worker, "sintetizar", lambda dados: BRIEFING_FALSO)
     monkeypatch.setattr(busca_worker, "coletar_perfil_linkedin", lambda url: None)
+    monkeypatch.setattr(busca_worker, "descobrir_linkedin_url", lambda nome, ctx=None: None)
     yield
     Base.metadata.drop_all(engine)
 
@@ -224,6 +225,106 @@ def test_reprocessa_mencoes_que_ficaram_sem_extracao(db, monkeypatch):
     assert all(m.sentimento == 0.5 for m in mencoes)
     pessoa = db.scalar(select(Pessoa).where(Pessoa.slug == "eduardo-bartolomeo"))
     assert pessoa.briefing == BRIEFING_FALSO
+
+
+def test_dedup_ignora_parametros_de_tracking(db, monkeypatch):
+    """A mesma matéria com ?srsltid= diferente não vira menção duplicada."""
+    base = "https://www.estadao.com.br/economia/vale-discute-saida/"
+    duplicadas = [
+        {**MENCOES_FALSAS[0], "url": f"{base}?srsltid=AAA"},
+        {**MENCOES_FALSAS[0], "url": f"{base}?srsltid=BBB"},
+        {**MENCOES_FALSAS[0], "url": f"{base}?utm_source=x&utm_campaign=y"},
+    ]
+    monkeypatch.setattr(busca_worker, "buscar_mencoes", lambda nome, limite=15: duplicadas)
+
+    busca_worker.executar_busca(_criar_job(db))
+
+    mencoes = db.scalars(select(Mencao)).all()
+    assert len(mencoes) == 1
+    assert mencoes[0].url == base
+
+
+def test_higienizacao_funde_duplicatas_antigas(db):
+    """Duplicatas com tracking gravadas antes da correção são fundidas."""
+    pessoa = Pessoa(slug="eduardo-bartolomeo", nome="Eduardo Bartolomeo")
+    db.add(pessoa)
+    db.flush()
+    base = "https://www.estadao.com.br/economia/vale-discute-saida/"
+    db.add_all(
+        [
+            Mencao(pessoa_id=pessoa.id, fonte="estadao", url=f"{base}?srsltid=AAA",
+                   sentimento=None, data_publicacao=None),
+            Mencao(pessoa_id=pessoa.id, fonte="estadao", url=f"{base}?srsltid=BBB",
+                   sentimento=-0.4, temas="governança"),
+        ]
+    )
+    db.commit()
+
+    busca_worker.executar_busca(_criar_job(db))
+
+    db.expire_all()
+    sobreviventes = db.scalars(
+        select(Mencao).where(Mencao.url.like(f"{base}%"))
+    ).all()
+    assert len(sobreviventes) == 1
+    assert sobreviventes[0].sentimento == -0.4  # mantém a versão processada
+    assert sobreviventes[0].url == base
+
+
+def test_briefing_usa_estado_completo_do_banco(db, monkeypatch):
+    """Menções processadas em execuções ANTERIORES entram no consolidado."""
+    pessoa = Pessoa(slug="eduardo-bartolomeo", nome="Eduardo Bartolomeo")
+    db.add(pessoa)
+    db.flush()
+    db.add(
+        Mencao(
+            pessoa_id=pessoa.id,
+            fonte="valor",
+            url="https://valor.globo.com/antiga",
+            titulo="Matéria antiga já processada",
+            sentimento=0.5,
+            temas="ESG,mineração",
+        )
+    )
+    db.commit()
+
+    # Nova execução sem nada novo: sem menções coletadas, sem LinkedIn
+    monkeypatch.setattr(busca_worker, "buscar_mencoes", lambda nome, limite=15: [])
+    capturado = {}
+
+    def sintetizar_espiao(dados):
+        capturado.update(dados)
+        return "Briefing com histórico."
+
+    monkeypatch.setattr(busca_worker, "sintetizar", sintetizar_espiao)
+
+    busca_worker.executar_busca(_criar_job(db))
+
+    # O consolidado veio do banco, não do lote (vazio) desta execução
+    assert len(capturado["mencoes"]) == 1
+    assert capturado["mencoes"][0]["titulo"] == "Matéria antiga já processada"
+    assert "ESG" in capturado["temas"]
+    pessoa = db.scalar(select(Pessoa).where(Pessoa.slug == "eduardo-bartolomeo"))
+    assert pessoa.briefing == "Briefing com histórico."
+
+
+def test_higienizacao_remove_eventos_de_pagina_indice(db):
+    pessoa = Pessoa(slug="eduardo-bartolomeo", nome="Eduardo Bartolomeo")
+    db.add(pessoa)
+    db.flush()
+    db.add_all(
+        [
+            Evento(nome="Evento legítimo", fonte_url="https://valor.globo.com/materia/2024/01/01/x"),
+            Evento(nome="Evento de índice", fonte_url="https://www.estadao.com.br/tudo-sobre/eduardo-bartolomeo/"),
+        ]
+    )
+    db.commit()
+
+    busca_worker.executar_busca(_criar_job(db))
+
+    db.expire_all()
+    nomes = {e.nome for e in db.scalars(select(Evento)).all()}
+    assert "Evento de índice" not in nomes
 
 
 def test_pipeline_falha_marca_job_failed(db, monkeypatch):

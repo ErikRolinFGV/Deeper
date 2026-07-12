@@ -9,6 +9,7 @@ Isso evita lixo de blogs, fóruns e sites duplicados.
 
 import re
 from typing import Any
+from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
 import httpx
 from loguru import logger
@@ -53,6 +54,27 @@ PORTAIS_BR = [
 ]
 
 
+# Parâmetros de tracking que fazem a MESMA matéria parecer URLs diferentes
+# (quebrariam o dedup por URL): ?srsltid= do Google, utm_* de campanhas, etc.
+_PARAMS_TRACKING_PREFIXOS = ("utm_",)
+_PARAMS_TRACKING = {"srsltid", "fbclid", "gclid", "igshid", "mc_cid", "mc_eid"}
+
+
+def limpar_url(url: str) -> str:
+    """Remove parâmetros de tracking e fragmento; preserva o resto da URL."""
+    if not url:
+        return url
+    partes = urlsplit(url)
+    params = [
+        (k, v)
+        for k, v in parse_qsl(partes.query, keep_blank_values=True)
+        if k not in _PARAMS_TRACKING and not k.startswith(_PARAMS_TRACKING_PREFIXOS)
+    ]
+    return urlunsplit(
+        (partes.scheme, partes.netloc, partes.path, urlencode(params), "")
+    )
+
+
 def _extrair_fonte(url: str) -> str:
     """Identifica o portal de origem a partir da URL."""
     for portal in PORTAIS_BR:
@@ -78,13 +100,13 @@ def _data_da_url(url: str) -> str | None:
 
 def _normalizar_resultado(item: dict[str, Any]) -> dict[str, Any]:
     """Converte um item do SerpAPI para o formato consumido pelo nosso pipeline."""
-    url = item.get("link") or ""
+    url = limpar_url(item.get("link") or "")
     # A data da URL tem prioridade: formato garantido (AAAA-MM-DD). O campo
     # 'date' do SerpAPI vem em formato humano ("Jun 15, 2026") e é fallback.
     data = _data_da_url(url) or item.get("date")
     return {
         "fonte": _extrair_fonte(url),
-        "url": item.get("link"),
+        "url": url or None,
         "titulo": item.get("title"),
         "snippet": item.get("snippet"),
         "data_publicacao": data,

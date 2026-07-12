@@ -2,7 +2,7 @@
 
 from datetime import datetime
 
-from sqlalchemy import DateTime, String, Text, func
+from sqlalchemy import JSON, DateTime, String, Text, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.db import Base
@@ -19,6 +19,15 @@ class Pessoa(Base):
     bio: Mapped[str | None] = mapped_column(Text, nullable=True)
     linkedin_url: Mapped[str | None] = mapped_column(String(512), nullable=True)
     foto_url: Mapped[str | None] = mapped_column(String(512), nullable=True)
+    localizacao: Mapped[str | None] = mapped_column(String(255), nullable=True)
+
+    # Payload bruto do actor Apify + carimbo da coleta. Guardar o bruto permite
+    # reprocessar o perfil (novo normalizador, novos campos) sem pagar de novo,
+    # e o carimbo implementa o TTL que evita coletas repetidas em force_refresh.
+    linkedin_dados: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    linkedin_coletado_em: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
 
     # Briefing executivo gerado pelo sintetizador LLM
     briefing: Mapped[str | None] = mapped_column(Text, nullable=True)

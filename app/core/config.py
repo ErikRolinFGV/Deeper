@@ -21,7 +21,12 @@ class Settings(BaseSettings):
     ANTHROPIC_API_KEY: str
     APIFY_TOKEN: str
     SERPAPI_KEY: str
-    CRUNCHBASE_API_KEY: str
+    # Crunchbase saiu do escopo do MVP (free tier descontinuado) — opcional.
+    CRUNCHBASE_API_KEY: str = "nao-usado"
+
+    # LinkedIn/Apify
+    APIFY_ACTOR_LINKEDIN: str = "apimaestro~linkedin-profile-detail"
+    LINKEDIN_TTL_DIAS: int = 30  # não recoletar (pagar) perfil mais novo que isso
 
     # Auth
     JWT_SECRET: str
