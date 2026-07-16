@@ -1,0 +1,181 @@
+{
+  "pessoa": {
+    "id": 1,
+    "slug": "eduardo-bartolomeo",
+    "nome": "Eduardo Bartolomeo",
+    "nome_completo": "Eduardo  Bartolomeo",
+    "cargo_atual": "Membro do conselho de administração — Boston Metal",
+    "bio": "Minha trajetória profissional é marcada por liderar operações complexas. Fui CEO da Vale de 2019 a 2024. Assumi a presidência no momento mais delicado da empresa, com o desafio de torná-la uma das mais seguras e confiáveis do mundo no setor de mineração. Desde então, minha gestão buscou estabelecer uma cultura de excelência operacional, com o equilíbrio do que acredito ser indispensável: segurança, eficiência e produtividade, com as pessoas no centro da estratégia. \n\nJá foram 20 anos de história com a Vale, onde exerci posições como as de diretor-executivo de Logística, Operações Integradas e Bulk Commodities e diretor-executivo de Metais Básicos. Como presidente, eu tornei a segurança como obsessão e implantei dois novos pilares estratégicos na empresa: Segurança e Excelência Operacional e Novo Pacto com a Sociedade. \n\nDentro desse novo pacto, se insere, com destaque, a questão ESG e o relacionamento da Vale com os diferentes atores. Acredito que a única maneira de atender a uma sociedade em constante mudança é por meio da transformação contínua, em uma jornada guiada por responsabilidade, transparência e consistência. Sob essas premissas e em constante diálogo, a Vale mantém um compromisso com o futuro do planeta, no qual a mineração será fundamental para que o Brasil se posicione na vanguarda mundial por uma economia verde e pela redução das emissões de CO2 - que certamente são importantes vetores de desenvolvimento socioeconômico e ambiental do país.",
+    "linkedin_url": "https://br.linkedin.com/in/eduardobartolomeo",
+    "foto_url": "https://media.licdn.com/dms/image/v2/D4D03AQHkX3DGVyRLFA/profile-displayphoto-shrink_800_800/profile-displayphoto-shrink_800_800/0/1699281003851?e=1785369600&v=beta&t=y62UIK4ZKc2Ygzb97uSXgBwxUZWRia9DdAPcAEFCKYE",
+    "atualizado_em": "2026-07-12T01:13:07.987658-03:00"
+  },
+  "briefing": "Eduardo Bartolomeo é engenheiro formado pela Universidade Federal Fluminense com pós-graduação em Administração de Empresas pela Katholieke Universiteit Leuven, e construiu sua trajetória profissional em grande parte dentro da Vale, onde atuou como diretor executivo de Logística e Operações Integradas entre 2004 e 2012. Entre os ciclos na mineradora, ocupou a presidência do Brazil Hospitality Group (2013–2015) e a CEO da NTS – Nova Transportadora do Sudeste. Retornou à Vale em 2019 como Diretor Presidente, cargo que exerceu até 2024, e atualmente integra o conselho de administração da Boston Metal, startup de metalurgia verde com sede nos EUA, posicionando-se, conforme seu próprio perfil no LinkedIn, como \"Board Member and Entrepreneur\".\n\nAo longo de sua gestão na Vale, Bartolomeo pautou consistentemente os temas de segurança operacional, eficiência produtiva e cultura organizacional centrada nas pessoas — narrativa que ele mesmo sintetizou em entrevista ao Valor Econômico (junho de 2024), em referência ao legado de Eliezer Batista. Sua presença na mídia foi predominantemente associada à pauta de sucessão corporativa e governança, com cobertura de tom neutro a levemente positivo em O Globo, Valor e Estadão quando o assunto era seu perfil ou desempenho, e com inclinações mais críticas ou negativas quando pautas envolviam pressão de acionistas e discussões sobre saída antecipada, conforme registrado pelo Estadão.\n\nNos últimos 12 meses, o evento central para Bartolomeo foi a transição de liderança na Vale: em março de 2024 foi confirmada sua permanência até o final do ano, com cobertura que oscilou entre a leitura de \"sobrevida\" (InfoMoney) e a de continuidade planejada (Valor, O Globo). Em outubro de 2024, ele concedeu entrevista a O Globo em que reconheceu ter assumido a empresa \"no momento mais difícil de sua história\", reforçando a narrativa de gestão de crise e recuperação institucional. Para fins de relacionamento, Bartolomeo encontra-se em fase de transição para novos papéis — conselho e empreendedorismo —, o que o torna um interlocutor relevante tanto no ecossistema de mineração e infraestrutura quanto no debate sobre tecnologias de baixo carbono para a indústria pesada, via seu vínculo com a Boston Metal.",
+  "cargos": [
+    {
+      "funcao": "Membro do conselho de administração",
+      "empresa": "Boston Metal",
+      "empresa_id": 10,
+      "inicio": null,
+      "fim": null,
+      "eh_atual": true
+    },
+    {
+      "funcao": "CEO",
+      "empresa": "BHG - Brazil Hospitality Group",
+      "empresa_id": 12,
+      "inicio": "2013-01-01",
+      "fim": "2015-01-01",
+      "eh_atual": false
+    },
+    {
+      "funcao": "Diretor Executivo",
+      "empresa": "Vale",
+      "empresa_id": 1,
+      "inicio": "2004-01-01",
+      "fim": "2012-01-01",
+      "eh_atual": false
+    },
+    {
+      "funcao": "Diretor Presidente",
+      "empresa": "Vale",
+      "empresa_id": 1,
+      "inicio": null,
+      "fim": null,
+      "eh_atual": false
+    },
+    {
+      "funcao": "CEO",
+      "empresa": "NTS - Nova Transportadora do Sudeste",
+      "empresa_id": 11,
+      "inicio": null,
+      "fim": null,
+      "eh_atual": false
+    }
+  ],
+  "mencoes": [
+    {
+      "id": 9,
+      "fonte": "oglobo",
+      "url": "https://oglobo.globo.com/economia/negocios/noticia/2024/10/02/assumi-a-vale-no-momento-mais-dificil-de-sua-historia-diz-ceo-em-despedida-nas-redes-sociais.ghtml",
+      "titulo": "'Assumi a Vale no momento mais difícil de sua história', diz ...",
+      "data_publicacao": "2024-10-02",
+      "sentimento": 0.2,
+      "temas": ["sucessão executiva", "gestão de crise", "mineração", "liderança corporativa"]
+    },
+    {
+      "id": 37,
+      "fonte": "valor",
+      "url": "https://valor.globo.com/conteudo-de-marca/vale/noticia/2024/06/27/bartolomeo-eliezer-ficaria-orgulhoso-em-ver-a-vale-pronta-para-o-futuro.ghtml",
+      "titulo": "Bartolomeo: “Eliezer ficaria orgulhoso em ver a Vale pronta ...",
+      "data_publicacao": "2024-06-27",
+      "sentimento": 0.5,
+      "temas": ["perfil executivo", "legado corporativo", "liderança"]
+    },
+    {
+      "id": 2,
+      "fonte": "estadao",
+      "url": "https://estadaori.estadao.com.br/2024/03/11/vale-confirma-eduardo-bartolomeu-como-ceo-ate-2024/",
+      "titulo": "Vale confirma Eduardo Bartolomeo como CEO até 2024",
+      "data_publicacao": "2024-03-11",
+      "sentimento": 0.4,
+      "temas": ["sucessão executiva", "governança corporativa", "transição de liderança"]
+    },
+    {
+      "id": 39,
+      "fonte": "valor",
+      "url": "https://valor.globo.com/empresas/noticia/2024/03/08/eduardo-bartolomeo-permanece-como-ceo-da-vale-ate-dezembro-deste-ano-2024-dizem-fontes.ghtml",
+      "titulo": "Eduardo Bartolomeo permanece como CEO da Vale até ...",
+      "data_publicacao": "2024-03-08",
+      "sentimento": 0,
+      "temas": ["sucessão executiva", "transição de liderança"]
+    },
+    {
+      "id": 1,
+      "fonte": "oglobo",
+      "url": "https://oglobo.globo.com/economia/noticia/2024/03/08/ceo-da-vale-eduardo-bartolomeo-sera-mantido-no-cargo-ate-dezembro.ghtml",
+      "titulo": "CEO da Vale, Eduardo Bartolomeo, será mantido no cargo ...",
+      "data_publicacao": "2024-03-08",
+      "sentimento": 0.3,
+      "temas": ["gestão executiva", "liderança corporativa", "mineração"]
+    },
+    {
+      "id": 10,
+      "fonte": "oglobo",
+      "url": "https://blogs.oglobo.globo.com/ancelmo/post/eduardo-bartolomeo-da-vale-sugere-como-presente-de-natal-o-livro-factfulness.html",
+      "titulo": "Eduardo Bartolomeo, da Vale, sugere como presente de Natal o ...",
+      "data_publicacao": null,
+      "sentimento": 0.3,
+      "temas": ["indicação de leitura", "cultura corporativa"]
+    },
+    {
+      "id": 7,
+      "fonte": "estadao",
+      "url": "https://www.estadao.com.br/economia/vale-discute-saida-antecipada-eduardo-bartolomeo/",
+      "titulo": "Vale discute saída antecipada de Eduardo Bartolomeo ...",
+      "data_publicacao": null,
+      "sentimento": -0.5,
+      "temas": ["governança corporativa", "sucessão executiva", "acionistas"]
+    },
+    {
+      "id": 5,
+      "fonte": "estadao",
+      "url": "https://einvestidor.estadao.com.br/noticias/vale-vale3-presidencia-eduardo-bartolomeu-mineradora-ceo/",
+      "titulo": "Vale (VALE3): CEOs da Embraer e Gerdau entram no páreo ...",
+      "data_publicacao": null,
+      "sentimento": -0.2,
+      "temas": ["sucessão executiva", "governança corporativa"]
+    },
+    {
+      "id": 3,
+      "fonte": "infomoney",
+      "url": "https://www.infomoney.com.br/business/na-vale-bartolomeo-ganha-mais-seis-meses-de-sobrevida-antes-de-deixar-cargo-de-ceo/",
+      "titulo": "Na Vale, Bartolomeo ganha mais sete meses de sobrevida ...",
+      "data_publicacao": null,
+      "sentimento": 0,
+      "temas": ["governança corporativa", "sucessão executiva", "renovação de mandato"]
+    }
+  ],
+  "eventos": [
+    {
+      "id": 1,
+      "nome": "Confirmação de Eduardo Bartolomeo como CEO da Vale até 2024",
+      "tipo": null,
+      "data": null,
+      "local": null,
+      "fonte_url": "https://estadaori.estadao.com.br/2024/03/11/vale-confirma-eduardo-bartolomeu-como-ceo-ate-2024/"
+    },
+    {
+      "id": 2,
+      "nome": "Processo de transição para nova liderança no início de 2025",
+      "tipo": null,
+      "data": null,
+      "local": null,
+      "fonte_url": "https://estadaori.estadao.com.br/2024/03/11/vale-confirma-eduardo-bartolomeu-como-ceo-ate-2024/"
+    },
+    {
+      "id": 3,
+      "nome": "Renovação de contrato de Eduardo Bartolomeo na Vale",
+      "tipo": null,
+      "data": null,
+      "local": null,
+      "fonte_url": "https://www.infomoney.com.br/business/na-vale-bartolomeo-ganha-mais-seis-meses-de-sobrevida-antes-de-deixar-cargo-de-ceo/"
+    },
+    {
+      "id": 4,
+      "nome": "Processo de sucessão da presidência da Vale",
+      "tipo": null,
+      "data": null,
+      "local": null,
+      "fonte_url": "https://einvestidor.estadao.com.br/noticias/vale-vale3-presidencia-eduardo-bartolomeu-mineradora-ceo/"
+    },
+    {
+      "id": 8,
+      "nome": "Saída de Eduardo Bartolomeo da presidência da Vale",
+      "tipo": null,
+      "data": null,
+      "local": null,
+      "fonte_url": "https://oglobo.globo.com/economia/negocios/noticia/2024/10/02/assumi-a-vale-no-momento-mais-dificil-de-sua-historia-diz-ceo-em-despedida-nas-redes-sociais.ghtml"
+    }
+  ]
+}

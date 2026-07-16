@@ -5,6 +5,7 @@ Rodar local:
 """
 
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 from loguru import logger
 
 from app.api import busca, grafo, job, perfil
@@ -14,6 +15,15 @@ app = FastAPI(
     title="FSB Executive Intelligence",
     description="Plataforma de inteligência sobre executivos brasileiros — MVP para FSB Holding.",
     version="0.1.0",
+)
+
+# CORS aberto para o MVP: o frontend (protótipo Claude design, arquivo local,
+# outra porta) roda em origem diferente da API. Restringir antes de produção.
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
 app.include_router(busca.router)

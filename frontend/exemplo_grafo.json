@@ -1,0 +1,30 @@
+{
+  "_comentario": "Resposta de GET /grafo/1?profundidade=2&peso_minimo=1 — estrutura real, rede ilustrativa baseada nos dados do banco (Bartolomeo + co-mencionados reais).",
+  "nodes": [
+    {
+      "id": 1,
+      "label": "Eduardo Bartolomeo",
+      "cargo_atual": "Membro do conselho de administração — Boston Metal",
+      "foto_url": "https://media.licdn.com/dms/image/v2/D4D03AQHkX3DGVyRLFA/profile-displayphoto-shrink_800_800/profile-displayphoto-shrink_800_800/0/1699281003851?e=1785369600&v=beta&t=y62UIK4ZKc2Ygzb97uSXgBwxUZWRia9DdAPcAEFCKYE",
+      "raiz": true
+    },
+    {
+      "id": 2,
+      "label": "Gustavo Pimenta",
+      "cargo_atual": "CEO da Vale",
+      "foto_url": null,
+      "raiz": false
+    },
+    {
+      "id": 7,
+      "label": "Eliezer Batista",
+      "cargo_atual": null,
+      "foto_url": null,
+      "raiz": false
+    }
+  ],
+  "edges": [
+    { "source": 1, "target": 2, "tipo": "co_mencionado", "peso": 2 },
+    { "source": 1, "target": 7, "tipo": "co_mencionado", "peso": 1 }
+  ]
+}
