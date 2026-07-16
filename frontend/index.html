@@ -626,9 +626,13 @@ function montarGrafo() {
     const d = ev.target.data();
     const pMid = ev.target.renderedMidpoint();
     const tt = $('tooltip-grafo');
-    tt.textContent = d.tipo === 'co_mencionado'
-      ? `co-mencionados em ${d.peso} ${d.peso === 1 ? 'matéria' : 'matérias'}`
-      : `${d.tipo} (peso ${d.peso})`;
+    const ROTULOS_ARESTA = {
+      co_mencionado: `co-mencionados em ${d.peso} ${d.peso === 1 ? 'matéria' : 'matérias'}`,
+      colega_empresa: `colegas em ${d.peso} ${d.peso === 1 ? 'empresa' : 'empresas'} (LinkedIn)`,
+      co_board: `conselho compartilhado (${d.peso} ${d.peso === 1 ? 'evidência' : 'evidências'})`,
+      co_evento: `presentes no mesmo evento (${d.peso}x)`,
+    };
+    tt.textContent = ROTULOS_ARESTA[d.tipo] || `${d.tipo} (peso ${d.peso})`;
     tt.style.left = pMid.x + 'px';
     tt.style.top = (pMid.y - 34) + 'px';
     tt.style.transform = 'translateX(-50%)';

@@ -35,6 +35,7 @@ from app.services.collectors.apify_linkedin import (
     descobrir_linkedin_url,
     normalizar_perfil,
 )
+from app.services.collectors.leitor_artigo import baixar_texto
 from app.services.collectors.serpapi_news import (
     _data_da_url,
     _eh_pagina_indice,
@@ -42,17 +43,19 @@ from app.services.collectors.serpapi_news import (
     limpar_url,
 )
 from app.services.graph.construtor import reforcar_relacao
+from app.services.graph.inferidor_formal import inferir_relacoes_formais
 from app.services.llm.extrator import extrair
 from app.services.llm.sintetizador import sintetizar
 
 # Versão do pipeline — aparece no log de cada job. Se o log mostrar uma
 # versão antiga, o processo do worker precisa ser reiniciado.
-PIPELINE_VERSAO = "2026-07-12.1"
+PIPELINE_VERSAO = "2026-07-12.3"
 
 # Limites de MVP: controlam custo de API por busca.
-MAX_MENCOES = 15          # resultados pedidos ao SerpAPI
-MAX_EXTRACOES = 10        # menções que passam pelo extrator LLM
-MAX_COMENCIONADOS = 5     # pessoas co-mencionadas processadas por menção
+MAX_MENCOES = 30          # resultados pedidos ao SerpAPI
+MAX_EXTRACOES = 20        # menções que passam pelo extrator LLM
+MAX_COMENCIONADOS = 10    # pessoas co-mencionadas processadas por menção
+MIN_TEXTO_COMPLETO = 500  # menção com texto menor que isso baixa o corpo da matéria
 
 
 # ---------- helpers de persistência ----------
@@ -251,6 +254,15 @@ def _processar_mencao(
     `extras` acumula o que NÃO é persistido em tabela própria (valores
     monetários, empresas citadas) para entrar no consolidado do sintetizador.
     """
+    # Enriquecimento: snippet do buscador é curto (~200 chars) e manchete de
+    # economia raramente nomeia pessoas — o corpo da matéria é onde o grafo
+    # nasce. Baixa uma vez e persiste em mencao.texto (reuso sem re-download).
+    if len(mencao.texto or "") < MIN_TEXTO_COMPLETO:
+        corpo = baixar_texto(mencao.url)
+        if corpo:
+            mencao.texto = corpo
+            logger.debug(f"Menção {mencao.id}: corpo baixado ({len(corpo)} chars)")
+
     texto = "\n".join(filter(None, [mencao.titulo, mencao.texto]))
     if not texto.strip():
         return
@@ -462,6 +474,13 @@ def executar_busca(job_id: int) -> None:
             )
 
         perfil_linkedin = _atualizar_com_linkedin(db, pessoa)
+        db.commit()
+
+        # Relações formais: cargos sobrepostos na mesma empresa → arestas
+        # colega_empresa/co_board (só entre pessoas já pesquisadas).
+        formais = inferir_relacoes_formais(db, pessoa)
+        if formais:
+            logger.info(f"Job {job_id}: {formais} relações formais inferidas via cargos")
         db.commit()
 
         # 3. Extração LLM + grafo

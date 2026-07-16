@@ -19,7 +19,7 @@ def reforcar_relacao(
 ) -> Relacao:
     """Cria a aresta se não existe; se existe, soma +1 ao peso e anexa evidência."""
     # Convenção: garantir A < B para arestas simétricas
-    if pessoa_a_id > pessoa_b_id and tipo in {"co_mencionado", "co_evento", "co_board"}:
+    if pessoa_a_id > pessoa_b_id and tipo in {"co_mencionado", "co_evento", "co_board", "colega_empresa"}:
         pessoa_a_id, pessoa_b_id = pessoa_b_id, pessoa_a_id
 
     rel = (
