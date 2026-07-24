@@ -340,3 +340,72 @@ def test_pipeline_falha_marca_job_failed(db, monkeypatch):
     job = db.get(JobColeta, job_id)
     assert job.status == StatusJob.FAILED
     assert "SerpAPI caiu" in job.erro
+
+
+def test_mencao_de_homonimo_e_descartada(db, monkeypatch):
+    """Extrator diz que o texto é sobre OUTRA pessoa → menção deletada."""
+    homonimo = EXTRACAO_FALSA.model_copy(update={"texto_e_sobre_alvo": False})
+    monkeypatch.setattr(busca_worker, "extrair", lambda texto, ctx: homonimo)
+
+    busca_worker.executar_busca(_criar_job(db))
+
+    assert db.scalars(select(Mencao)).all() == []  # nada do homônimo sobrou
+    assert db.scalar(select(Relacao)) is None
+    pessoa = db.scalar(select(Pessoa).where(Pessoa.slug == "eduardo-bartolomeo"))
+    assert pessoa.briefing is None  # sem material legítimo, sem briefing
+
+
+def test_extrator_recebe_contexto_com_cargo(db, monkeypatch):
+    """Pessoa com cargo conhecido → contexto rico chega ao extrator."""
+    pessoa = Pessoa(slug="eduardo-bartolomeo", nome="Eduardo Bartolomeo",
+                    cargo_atual="CEO da Vale")
+    db.add(pessoa)
+    db.commit()
+
+    contextos = []
+
+    def espiao(texto, ctx):
+        contextos.append(ctx)
+        return EXTRACAO_FALSA
+
+    monkeypatch.setattr(busca_worker, "extrair", espiao)
+    busca_worker.executar_busca(_criar_job(db))
+
+    assert contextos
+    assert all(c == "Eduardo Bartolomeo — CEO da Vale" for c in contextos)
+
+
+# ---------- contexto das co-menções (feedback: "top 50 não é conexão") ----------
+
+
+def test_comencao_normal_recebe_contexto_direta(db):
+    busca_worker.executar_busca(_criar_job(db))
+
+    rel = db.scalar(select(Relacao))
+    assert rel is not None
+    assert all(ev["contexto"] == "direta" for ev in rel.evidencias)
+
+
+def test_materia_lista_ranking_rotula_evidencia(db, monkeypatch):
+    extracao_lista = EXTRACAO_FALSA.model_copy(update={"eh_lista_ou_ranking": True})
+    monkeypatch.setattr(busca_worker, "extrair", lambda texto, ctx: extracao_lista)
+
+    busca_worker.executar_busca(_criar_job(db))
+
+    rel = db.scalar(select(Relacao))
+    assert all(ev["contexto"] == "lista" for ev in rel.evidencias)
+
+
+def test_fanout_alto_tambem_vira_lista(db, monkeypatch):
+    """Matéria citando 6+ pessoas juntas é lista mesmo sem rótulo do LLM."""
+    muitos = EXTRACAO_FALSA.model_copy(
+        update={"pessoas_mencionadas": [f"Pessoa Num {i}" for i in range(7)]}
+    )
+    monkeypatch.setattr(busca_worker, "extrair", lambda texto, ctx: muitos)
+
+    busca_worker.executar_busca(_criar_job(db))
+
+    rels = db.scalars(select(Relacao)).all()
+    assert rels
+    for rel in rels:
+        assert all(ev["contexto"] == "lista" for ev in rel.evidencias)

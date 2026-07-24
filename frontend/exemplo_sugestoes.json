@@ -1,0 +1,24 @@
+{
+  "_comentario": "GET /sugestoes?q=eduardo&externas=true — as duas camadas de sugestão.",
+  "locais": [
+    {
+      "pessoa_id": 1,
+      "nome": "Eduardo Bartolomeo",
+      "cargo_atual": "Membro do conselho de administração — Boston Metal",
+      "foto_url": "https://media.licdn.com/dms/image/v2/D4D03AQHkX3DGVyRLFA/profile-displayphoto-shrink_800_800/profile-displayphoto-shrink_800_800/0/1699281003851?e=1785369600&v=beta&t=y62UIK4ZKc2Ygzb97uSXgBwxUZWRia9DdAPcAEFCKYE",
+      "tem_briefing": true
+    }
+  ],
+  "linkedin": [
+    {
+      "nome": "Eduardo Bartolomeo",
+      "headline": "Board Member and Entrepreneur",
+      "linkedin_url": "https://br.linkedin.com/in/eduardobartolomeo"
+    },
+    {
+      "nome": "Eduardo Vale",
+      "headline": "Analista de Sistemas — TOTVS",
+      "linkedin_url": "https://www.linkedin.com/in/eduardo-vale-exemplo"
+    }
+  ]
+}

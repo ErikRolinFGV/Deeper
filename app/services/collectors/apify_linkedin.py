@@ -76,6 +76,56 @@ def descobrir_linkedin_url(nome: str, contexto: str | None = None) -> str | None
     return None
 
 
+def sugerir_perfis_linkedin(consulta: str, limite: int = 5) -> list[dict]:
+    """Busca perfis públicos candidatos no LinkedIn via SerpAPI.
+
+    Usado pelas sugestões de busca: o usuário digita "Eduardo Vale" e recebe
+    candidatos reais (nome, headline, URL) para escolher — o que elimina
+    typos e homônimos antes de gastar coleta.
+
+    Custa 1 busca SerpAPI por chamada — o frontend só chama sob demanda.
+    """
+    if not consulta.strip():
+        return []
+
+    logger.info(f"Sugestões LinkedIn: '{consulta}'")
+    params = {
+        "engine": "google",
+        "q": f"site:linkedin.com/in {consulta}",
+        "hl": "pt-br",
+        "gl": "br",
+        "num": limite + 3,  # margem para descartar resultados sem /in/
+        "api_key": settings.SERPAPI_KEY,
+    }
+    try:
+        resp = httpx.get(SERPAPI_URL, params=params, timeout=TIMEOUT)
+        resp.raise_for_status()
+        dados = resp.json()
+    except Exception as exc:
+        logger.error(f"Sugestões LinkedIn falharam para '{consulta}': {exc}")
+        return []
+
+    sugestoes = []
+    vistos: set[str] = set()
+    for item in dados.get("organic_results", []) or []:
+        m = _LINKEDIN_IN.search(item.get("link") or "")
+        if not m:
+            continue
+        url = m.group(0)
+        if url in vistos:
+            continue
+        vistos.add(url)
+        # Título típico: "Nome Sobrenome - Cargo - Empresa | LinkedIn"
+        titulo = (item.get("title") or "").replace("| LinkedIn", "").strip()
+        partes = [p.strip() for p in titulo.split(" - ") if p.strip()]
+        nome = partes[0] if partes else titulo
+        headline = " — ".join(partes[1:]) if len(partes) > 1 else (item.get("snippet") or "")[:120]
+        sugestoes.append({"nome": nome, "headline": headline or None, "linkedin_url": url})
+        if len(sugestoes) >= limite:
+            break
+    return sugestoes
+
+
 # ---------- 2. coleta via actor Apify ----------
 
 

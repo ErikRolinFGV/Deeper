@@ -83,8 +83,19 @@ def test_gerar_slug_normaliza_acentos_e_espacos():
 # ---------- /busca ----------
 
 
-def test_busca_cria_job_quando_pessoa_nao_existe(client):
+def test_busca_livre_de_pessoa_nova_e_rejeitada(client):
+    """Pessoa nova sem linkedin_url confirmada: 422 (seleção obrigatória)."""
     resp = client.post("/busca", json={"nome": "Eduardo Bartolomeo"})
+    assert resp.status_code == 422
+    assert "sugest" in resp.json()["detail"].lower()
+
+
+def test_busca_cria_job_com_linkedin_confirmado(client):
+    resp = client.post(
+        "/busca",
+        json={"nome": "Eduardo Bartolomeo",
+              "linkedin_url": "https://br.linkedin.com/in/eduardobartolomeo"},
+    )
     assert resp.status_code == 200
     corpo = resp.json()
     assert corpo["cache_hit"] is False

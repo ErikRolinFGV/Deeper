@@ -39,6 +39,11 @@
 
   .card-ajuda { background: #161109; border: 1px solid #251D13; border-radius: 10px; padding: 14px 16px; display: flex; flex-direction: column; gap: 6px; }
 
+  .item-sugestao { display: flex; align-items: center; gap: 10px; padding: 10px 14px; cursor: pointer; border-bottom: 1px solid #211A11; }
+  .item-sugestao:hover { background: #1F180E; }
+  .rodape-sugestoes { display: flex; align-items: center; justify-content: center; gap: 8px; padding: 10px 14px; cursor: pointer; font-size: 12.5px; color: #F5921E; }
+  .rodape-sugestoes:hover { background: #1F180E; }
+
   .card-mencao { background: #161109; border: 1px solid #251D13; border-radius: 10px; padding: 16px 18px; display: flex; flex-direction: column; gap: 10px; transition: border-color 0.2s, transform 0.2s, box-shadow 0.2s; }
   .card-mencao:hover { border-color: #4A3C26; transform: translateY(-2px); box-shadow: 0 10px 28px rgba(0,0,0,0.35); }
   .link-mencao { font-size: 15px; font-weight: 500; color: #F5EFE6; line-height: 1.4; flex: 1; }
@@ -67,9 +72,12 @@
         <div style="font-size:12px; color:#8A7A64; letter-spacing:0.1em; text-transform:uppercase;">Pesquisa e inteligência de dados · FSB Holding</div>
       </div>
     </div>
-    <div style="display:flex; gap:10px; width:100%;">
-      <input id="input-busca" class="input-busca" placeholder="Pesquisar executivo..." autocomplete="off">
-      <button id="btn-buscar" class="btn-primario">Pesquisar</button>
+    <div style="position:relative; width:100%;">
+      <div style="display:flex; gap:10px; width:100%;">
+        <input id="input-busca" class="input-busca" placeholder="Pesquisar por nome, cargo ou empresa..." autocomplete="off">
+        <button id="btn-buscar" class="btn-primario">Pesquisar</button>
+      </div>
+      <div id="dropdown-sugestoes" hidden style="position:absolute; top:calc(100% + 6px); left:0; right:0; background:#18130C; border:1px solid #332818; border-radius:10px; box-shadow:0 14px 40px rgba(0,0,0,0.55); z-index:20; overflow:hidden;"></div>
     </div>
     <div style="display:flex; flex-direction:column; align-items:center; gap:14px; width:100%;">
       <label id="toggle-forcar" style="display:flex; align-items:center; gap:10px; cursor:pointer; user-select:none;">
@@ -78,7 +86,7 @@
         </div>
         <span style="font-size:13px; color:#B3A48E;">Forçar nova coleta <span style="color:#8A7A64;">(ignora o cache de 7 dias e busca dados atualizados)</span></span>
       </label>
-      <div style="font-size:13px; color:#8A7A64;">Fontes públicas: LinkedIn + imprensa. A coleta leva de 20 a 60 segundos.</div>
+      <div style="font-size:13px; color:#8A7A64;">Digite e <span style="color:#B3A48E;">escolha uma sugestão</span> — a busca sempre parte de um perfil confirmado. Coleta: 20 a 60s.</div>
     </div>
 
     <div id="bloco-historico" hidden style="width:100%; display:flex; flex-direction:column; gap:10px;">
@@ -121,6 +129,10 @@
     </div>
     <div id="lista-etapas" style="display:flex; flex-direction:column;"></div>
     <div style="font-size:12px; color:#8A7A64;">Consultando fontes públicas em tempo real — não feche esta janela.</div>
+    <div style="display:flex; align-items:center; gap:12px;">
+      <button id="btn-cancelar" class="btn-outline" style="padding:9px 18px;">Cancelar e voltar</button>
+      <span style="font-size:11.5px; color:#5E5240;">a coleta continua no servidor e ficará disponível no cache</span>
+    </div>
   </div>
 </section>
 
@@ -215,7 +227,7 @@ const ETAPAS = [
 const ETAPA_AVANCA_EM = [0, 5000, 12000, 24000];
 
 const ITENS_AJUDA = [
-  { num:'1', titulo:'Pesquise um executivo', texto:'Digite o nome completo e pressione Enter. Confira a grafia: a ferramenta cria um dossiê para o nome exato digitado. A coleta usa dados públicos de LinkedIn e imprensa.' },
+  { num:'1', titulo:'Pesquise e escolha a pessoa', texto:'Digite nome, cargo ou empresa ("CEO do Nubank") e pressione Enter. Aparecem candidatos do acervo e do LinkedIn — escolha QUEM você quer dizer. A coleta só começa com um perfil confirmado, o que elimina homônimos e enganos.' },
   { num:'2', titulo:'Aguarde a coleta', texto:'O processo leva de 20 a 60 segundos: busca na imprensa, coleta do LinkedIn, análise com IA e montagem do grafo de conexões.' },
   { num:'3', titulo:'Leia o briefing', texto:'O dossiê abre com um briefing executivo de 3 parágrafos: quem é, o que pensa e como a mídia o trata — pronto para preparar sua aproximação.' },
   { num:'4', titulo:'Explore menções e sentimento', texto:'Cada matéria traz um indicador de sentimento de −1 (negativo) a +1 (positivo) e chips com os temas tratados. Clique no título para abrir a matéria.' },
@@ -349,17 +361,19 @@ function mostrarErro(mensagem, detalhe) {
 }
 
 // ═══════════════ FLUXO PRINCIPAL (API REAL) ═══════════════
-function iniciarBusca(nome) {
+function iniciarBusca(nome, linkedinUrl) {
+  fecharSugestoes();
   registrarHistorico(nome);
   state.nomeBuscado = nome;
+  state.ultimaUrl = linkedinUrl || null;  // p/ "Tentar novamente" repetir a seleção
   destruirGrafo();
   $('carregando-nome').textContent = nome;
   mostrarTela('carregando');
   iniciarSimulacaoVisual();
-  executarFluxo(nome, state.forcar);
+  executarFluxo(nome, state.forcar, linkedinUrl);
 }
 
-async function executarFluxo(nome, forcar) {
+async function executarFluxo(nome, forcar, linkedinUrl) {
   const meuFluxo = ++state.fluxoId;
   const cancelado = () => state.fluxoId !== meuFluxo;
 
@@ -368,7 +382,7 @@ async function executarFluxo(nome, forcar) {
     const busca = await fetchJSON(`${API_BASE}/busca`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ nome, force_refresh: forcar }),
+      body: JSON.stringify({ nome, force_refresh: forcar, linkedin_url: linkedinUrl || null }),
     });
     if (cancelado()) return;
 
@@ -543,6 +557,13 @@ function renderDossie() {
                   <div id="card-no-nome" style="font-size:14px; font-weight:600;"></div>
                   <div id="card-no-cargo" style="font-size:12.5px; color:#B3A48E;"></div>
                 </div>
+                <div id="card-aresta" hidden style="position:absolute; left:14px; right:14px; bottom:14px; max-height:180px; overflow-y:auto; background:#1F180E; border:1px solid #332818; border-radius:8px; padding:12px 16px; box-shadow:0 8px 24px rgba(0,0,0,0.45);">
+                  <div style="display:flex; align-items:baseline; justify-content:space-between; gap:12px; margin-bottom:8px;">
+                    <div id="card-aresta-titulo" style="font-size:13px; font-weight:600;"></div>
+                    <span id="card-aresta-fechar" style="font-size:11.5px; color:#8A7A64; cursor:pointer; flex-shrink:0;">fechar ✕</span>
+                  </div>
+                  <div id="card-aresta-lista" style="display:flex; flex-direction:column; gap:7px;"></div>
+                </div>
                 <div style="position:absolute; right:14px; top:12px; font-size:11.5px; color:#8A7A64;">Clique num nó para detalhes · arraste para reorganizar</div>
               </div>
             </div>
@@ -571,6 +592,7 @@ function renderDossie() {
     state.forcar = forcarOriginal;
     renderToggle();
   });
+  $('card-aresta-fechar').addEventListener('click', () => { $('card-aresta').hidden = true; });
   montarFoto(pess.foto_url, iniciais);
   montarGrafo();
 }
@@ -593,7 +615,7 @@ function montarGrafo() {
     container: el,
     elements: [
       ...g.nodes.map(n => ({ data: { id: String(n.id), label: n.label, cargo: n.cargo_atual, raiz: !!n.raiz } })),
-      ...g.edges.map(e => ({ data: { id: `e${e.source}-${e.target}`, source: String(e.source), target: String(e.target), peso: e.peso, tipo: e.tipo } })),
+      ...g.edges.map(e => ({ data: { id: `e${e.source}-${e.target}-${e.tipo}`, source: String(e.source), target: String(e.target), peso: e.peso, tipo: e.tipo, evidencias: e.evidencias || [] } })),
     ],
     style: [
       { selector: 'node', style: {
@@ -619,9 +641,42 @@ function montarGrafo() {
     const d = ev.target.data();
     $('card-no-nome').textContent = d.label;
     $('card-no-cargo').textContent = d.cargo || 'cargo não informado';
+    $('card-aresta').hidden = true;
     $('card-no').hidden = false;
   });
-  state.cy.on('tap', ev => { if (ev.target === state.cy) $('card-no').hidden = true; });
+  state.cy.on('tap', 'edge', ev => {
+    const d = ev.target.data();
+    const evs = d.evidencias || [];
+    const listas = evs.filter(e => e.contexto === 'lista').length;
+    const ROTULOS = {
+      co_mencionado: 'Co-menções na imprensa',
+      colega_empresa: 'Colegas de empresa (LinkedIn)',
+      co_board: 'Conselho compartilhado',
+      co_evento: 'Presentes no mesmo evento',
+    };
+    let titulo = `${ROTULOS[d.tipo] || d.tipo} · ${d.peso} evidência${d.peso === 1 ? '' : 's'}`;
+    if (listas) titulo += ` · ${listas} em lista/ranking`;
+    $('card-aresta-titulo').textContent = titulo;
+    $('card-aresta-lista').innerHTML = evs.length ? evs.map(e => {
+      const badgeLista = e.contexto === 'lista'
+        ? '<span style="font-size:10px; color:#B3A48E; border:1px solid #463822; border-radius:999px; padding:1px 7px; flex-shrink:0;" title="Citados juntos numa lista/ranking — não indica relação direta">lista/ranking</span>'
+        : '';
+      if (e.mencao_url) {
+        return `<div style="display:flex; align-items:baseline; gap:8px;">
+          <a href="${esc(e.mencao_url)}" target="_blank" rel="noopener" style="font-size:12.5px; line-height:1.4; min-width:0;">${esc(e.titulo || e.mencao_url)}</a>${badgeLista}
+        </div>`;
+      }
+      if (e.fonte === 'linkedin_cargos') {
+        return `<div style="font-size:12.5px; color:#CFC3B0; line-height:1.4;">${esc(e.empresa || '')} — ${esc(e.funcao_a || '?')} / ${esc(e.funcao_b || '?')} <span style="font-size:10px; color:#8A7A64;">(trajetórias no LinkedIn)</span></div>`;
+      }
+      return `<div style="font-size:12px; color:#8A7A64;">${esc(e.titulo || e.empresa || 'evidência sem detalhe')}</div>`;
+    }).join('') : '<div style="font-size:12px; color:#8A7A64;">Evidências não registradas para esta aresta (coletada antes da rastreabilidade). Um force refresh das duas pessoas reconstrói.</div>';
+    $('card-no').hidden = true;
+    $('card-aresta').hidden = false;
+  });
+  state.cy.on('tap', ev => {
+    if (ev.target === state.cy) { $('card-no').hidden = true; $('card-aresta').hidden = true; }
+  });
   state.cy.on('mouseover', 'edge', ev => {
     const d = ev.target.data();
     const pMid = ev.target.renderedMidpoint();
@@ -641,11 +696,99 @@ function montarGrafo() {
   state.cy.on('mouseout', 'edge', () => { $('tooltip-grafo').hidden = true; });
 }
 
+// ═══════════════ SUGESTÕES DE BUSCA ═══════════════
+let sugestaoTimer = null;
+let ultimaConsulta = '';
+
+function fecharSugestoes() {
+  $('dropdown-sugestoes').hidden = true;
+}
+
+function renderSugestoes(dados, consulta, externasCarregadas) {
+  const dd = $('dropdown-sugestoes');
+  const locais = dados.locais || [];
+  const linkedin = dados.linkedin || [];
+  let html = '';
+
+  if (locais.length) {
+    html += '<div style="padding:8px 14px 4px; font-size:10.5px; letter-spacing:0.1em; text-transform:uppercase; color:#8A7A64; font-weight:600;">No acervo</div>';
+    html += locais.map((p, i) => `
+      <div class="item-sugestao" data-tipo="local" data-idx="${i}">
+        <span style="width:28px; height:28px; border-radius:50%; background:#2A2115; color:#F5921E; display:flex; align-items:center; justify-content:center; font-size:10.5px; font-weight:600; flex-shrink:0;">${esc(iniciaisDe(p.nome))}</span>
+        <div style="min-width:0;">
+          <div style="font-size:13.5px; color:#EDE6DA;">${esc(p.nome)}</div>
+          <div style="font-size:11.5px; color:#8A7A64; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${esc(p.cargo_atual || 'dossiê salvo')}</div>
+        </div>
+        <span style="margin-left:auto; font-size:10.5px; color:#46A758; flex-shrink:0;">${p.tem_briefing ? 'dossiê pronto' : 'no banco'}</span>
+      </div>`).join('');
+  }
+  if (linkedin.length) {
+    html += '<div style="padding:8px 14px 4px; font-size:10.5px; letter-spacing:0.1em; text-transform:uppercase; color:#8A7A64; font-weight:600;">LinkedIn</div>';
+    html += linkedin.map((p, i) => `
+      <div class="item-sugestao" data-tipo="linkedin" data-idx="${i}">
+        <span style="width:28px; height:28px; border-radius:6px; background:#2A2115; color:#F5921E; display:flex; align-items:center; justify-content:center; font-size:12px; font-weight:700; flex-shrink:0;">in</span>
+        <div style="min-width:0;">
+          <div style="font-size:13.5px; color:#EDE6DA;">${esc(p.nome)}</div>
+          <div style="font-size:11.5px; color:#8A7A64; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${esc(p.headline || p.linkedin_url)}</div>
+        </div>
+      </div>`).join('');
+  }
+  if (!externasCarregadas) {
+    html += `<div class="rodape-sugestoes" id="btn-sugestoes-linkedin">Buscar "${esc(consulta)}" no LinkedIn ↗ <span style="color:#8A7A64; font-size:11px;">(nome, cargo ou empresa)</span></div>`;
+  } else if (!locais.length && !linkedin.length) {
+    html += '<div style="padding:12px 14px; font-size:12.5px; color:#8A7A64;">Nenhum candidato encontrado — verifique a grafia ou pesquise direto.</div>';
+  }
+
+  if (!html) { fecharSugestoes(); return; }
+  dd.innerHTML = html;
+  dd.hidden = false;
+
+  dd.querySelectorAll('.item-sugestao').forEach(el => {
+    el.addEventListener('click', () => {
+      const i = Number(el.dataset.idx);
+      if (el.dataset.tipo === 'local') iniciarBusca(locais[i].nome);
+      else iniciarBusca(linkedin[i].nome, linkedin[i].linkedin_url);
+    });
+  });
+  const btnLi = dd.querySelector('#btn-sugestoes-linkedin');
+  if (btnLi) btnLi.addEventListener('click', () => carregarSugestoes(consulta, true));
+}
+
+async function carregarSugestoes(consulta, externas) {
+  try {
+    if (externas) {
+      const dd = $('dropdown-sugestoes');
+      dd.hidden = false;
+      dd.innerHTML = '<div style="padding:12px 14px; font-size:12.5px; color:#8A7A64;">Buscando candidatos no LinkedIn...</div>';
+    }
+    const dados = await fetchJSON(`${API_BASE}/sugestoes?q=${encodeURIComponent(consulta)}&externas=${externas ? 'true' : 'false'}`);
+    if ($('input-busca').value.trim() !== consulta) return; // usuário já mudou o texto
+    renderSugestoes(dados, consulta, externas);
+  } catch (e) {
+    fecharSugestoes(); // sugestão é conveniência: falha silenciosa, busca direta segue funcionando
+  }
+}
+
+$('input-busca').addEventListener('input', () => {
+  clearTimeout(sugestaoTimer);
+  const q = $('input-busca').value.trim();
+  if (q.length < 2) { fecharSugestoes(); return; }
+  sugestaoTimer = setTimeout(() => {
+    if (q !== ultimaConsulta) { ultimaConsulta = q; carregarSugestoes(q, false); }
+  }, 300);
+});
+$('input-busca').addEventListener('keydown', ev => { if (ev.key === 'Escape') fecharSugestoes(); });
+document.addEventListener('click', ev => {
+  if (!ev.target.closest('#dropdown-sugestoes') && ev.target.id !== 'input-busca') fecharSugestoes();
+});
+
 // ═══════════════ BOOTSTRAP ═══════════════
 function buscarDoInput() {
-  const nome = $('input-busca').value.trim();
-  if (nome.length < 2) return;
-  iniciarBusca(nome);
+  // Busca livre desabilitada: Pesquisar/Enter abre as sugestões (acervo +
+  // LinkedIn) e o usuário escolhe QUEM quer dizer antes de qualquer coleta.
+  const q = $('input-busca').value.trim();
+  if (q.length < 2) return;
+  carregarSugestoes(q, true);
 }
 
 $('btn-buscar').addEventListener('click', buscarDoInput);
@@ -654,7 +797,8 @@ $('toggle-forcar').addEventListener('click', ev => { ev.preventDefault(); state.
 $('btn-ajuda').addEventListener('click', () => { state.ajudaAberta = !state.ajudaAberta; renderAjuda(); });
 $('btn-limpar-historico').addEventListener('click', () => { state.historico = []; renderHistorico(); });
 $('btn-erro-voltar').addEventListener('click', voltarBusca);
-$('btn-tentar-novamente').addEventListener('click', () => { if (state.nomeBuscado) iniciarBusca(state.nomeBuscado); else voltarBusca(); });
+$('btn-cancelar').addEventListener('click', voltarBusca);
+$('btn-tentar-novamente').addEventListener('click', () => { if (state.nomeBuscado) iniciarBusca(state.nomeBuscado, state.ultimaUrl); else voltarBusca(); });
 
 renderToggle();
 $('input-busca').focus();

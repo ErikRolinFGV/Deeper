@@ -3,14 +3,32 @@
 Base URL local: `http://localhost:8000` · Docs interativas: `http://localhost:8000/docs`
 CORS: aberto (`*`) — qualquer origem pode chamar a API no MVP.
 
-## Fluxo principal do frontend
+## Fluxo principal do frontend (v2 — seleção obrigatória)
 
 ```
-1. POST /busca {nome}            → job_id (ou cache_hit=true com pessoa_id direto)
-2. GET  /job/{job_id}            → polling a cada 2-3s até status "done" (leva ~20-60s)
-3. GET  /perfil/{pessoa_id}      → dossiê completo (renderizar)
-4. GET  /grafo/{pessoa_id}       → nós e arestas (renderizar com Cytoscape.js)
+1. GET  /sugestoes?q=...&externas=true  → usuário ESCOLHE a pessoa (obrigatório p/ pessoa nova)
+2. POST /busca {nome, linkedin_url}     → job_id (ou cache_hit=true com pessoa_id direto)
+   ⚠ pessoa nova SEM linkedin_url → 422 (busca livre desabilitada)
+3. GET  /job/{job_id}                   → polling 2-3s até "done" (~20-60s) | "failed" traz .erro
+4. GET  /perfil/{pessoa_id}             → dossiê completo
+5. GET  /grafo/{pessoa_id}              → nós e arestas COM evidências (Cytoscape.js)
 ```
+
+## GET /sugestoes?q=eduardo+vale&externas=true
+
+- `q` (min 2 chars): nome, cargo ou empresa.
+- `externas=false` (default): só o acervo local — grátis, pode chamar com debounce.
+- `externas=true`: também busca candidatos no LinkedIn — custa 1 busca SerpAPI,
+  chamar apenas em ação explícita (Enter/botão).
+
+```json
+{
+  "locais":   [ { "pessoa_id": 1, "nome": "Eduardo Bartolomeo", "cargo_atual": "Membro do conselho — Boston Metal", "foto_url": "https://...", "tem_briefing": true } ],
+  "linkedin": [ { "nome": "Eduardo Bartolomeo", "headline": "Board Member — Boston Metal", "linkedin_url": "https://br.linkedin.com/in/eduardobartolomeo" } ]
+}
+```
+Clicar num item `linkedin` → `POST /busca` com `nome` + `linkedin_url` (identidade confirmada).
+Clicar num item `locais` → `POST /busca` só com `nome` (pessoa já existe; cache/recoleta normais).
 
 ---
 
@@ -89,15 +107,27 @@ Rede de conexões, formato pronto para Cytoscape.js. Ver `exemplo_grafo.json`.
 {
   "nodes": [
     { "id": 1, "label": "Eduardo Bartolomeo", "cargo_atual": "Membro do conselho de administração — Boston Metal", "foto_url": "https://...", "raiz": true },
-    { "id": 7, "label": "Eliezer Batista", "cargo_atual": null, "foto_url": null, "raiz": false }
+    { "id": 7, "label": "Gustavo Pimenta", "cargo_atual": "CEO da Vale", "foto_url": null, "raiz": false }
   ],
   "edges": [
-    { "source": 1, "target": 7, "tipo": "co_mencionado", "peso": 2 }
+    { "source": 1, "target": 7, "tipo": "co_mencionado", "peso": 2,
+      "evidencias": [
+        { "mencao_url": "https://valor.globo.com/...", "titulo": "Matéria X", "contexto": "direta" },
+        { "mencao_url": "https://exame.com/50-mais", "titulo": "50 mais ricos", "contexto": "lista" }
+      ] },
+    { "source": 1, "target": 7, "tipo": "colega_empresa", "peso": 1,
+      "evidencias": [ { "fonte": "linkedin_cargos", "empresa": "Vale", "funcao_a": "Diretor Presidente", "funcao_b": "CFO" } ] }
   ]
 }
 ```
-- `tipo` das arestas: `co_mencionado` (citados na mesma matéria) — futuramente `co_evento`, `co_board`.
-- `peso`: nº de evidências; usar na espessura da aresta.
+- `tipo` das arestas: `co_mencionado` (imprensa), `colega_empresa` e `co_board`
+  (períodos sobrepostos no LinkedIn — laços formais), `co_evento`.
+  Pode haver MAIS DE UMA aresta entre o mesmo par (tipos diferentes).
+- `peso`: nº de evidências (espessura).
+- `evidencias` (máx. 8, mais recentes): para `co_mencionado` → {mencao_url, titulo,
+  contexto}; para laços formais → {fonte: "linkedin_cargos", empresa, funcao_a, funcao_b}.
+- `contexto`: "direta" (relação real) ou "lista" (citados juntos num ranking tipo
+  "50 mais ricos" — NÃO é conexão genuína; a UI deve deixar isso visível).
 - `404` se a pessoa não existe.
 
 ## GET /

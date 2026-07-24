@@ -49,7 +49,7 @@ from app.services.llm.sintetizador import sintetizar
 
 # Versão do pipeline — aparece no log de cada job. Se o log mostrar uma
 # versão antiga, o processo do worker precisa ser reiniciado.
-PIPELINE_VERSAO = "2026-07-12.3"
+PIPELINE_VERSAO = "2026-07-23.2"
 
 # Limites de MVP: controlam custo de API por busca.
 MAX_MENCOES = 30          # resultados pedidos ao SerpAPI
@@ -157,11 +157,15 @@ def _persistir_mencoes(db: Session, pessoa: Pessoa, brutas: list[dict]) -> list[
 
 
 def _persistir_perfil_linkedin(db: Session, pessoa: Pessoa, perfil: dict) -> None:
-    """Grava na ficha e no histórico o perfil já normalizado. Idempotente."""
-    pessoa.nome_completo = pessoa.nome_completo or perfil.get("nome_completo")
-    pessoa.bio = pessoa.bio or perfil.get("sobre")
-    pessoa.foto_url = pessoa.foto_url or perfil.get("foto_url")
-    pessoa.localizacao = pessoa.localizacao or perfil.get("localizacao")
+    """Grava na ficha e no histórico o perfil já normalizado. Idempotente.
+
+    O LinkedIn é a fonte primária destes campos: quando presente, VENCE o
+    valor antigo (que pode vir de coleta anterior ou de homônimo).
+    """
+    pessoa.nome_completo = perfil.get("nome_completo") or pessoa.nome_completo
+    pessoa.bio = perfil.get("sobre") or pessoa.bio
+    pessoa.foto_url = perfil.get("foto_url") or pessoa.foto_url
+    pessoa.localizacao = perfil.get("localizacao") or pessoa.localizacao
 
     # Cargo atual: a experiência corrente do LinkedIn é a fonte mais
     # estruturada que temos — tem prioridade sobre menções de imprensa.
@@ -267,8 +271,20 @@ def _processar_mencao(
     if not texto.strip():
         return
 
-    entidades = extrair(texto, pessoa.nome)
+    # Contexto rico (nome + cargo/empresa) permite ao extrator detectar
+    # homônimos: matéria sobre "outro" Renato Costa é descartada.
+    contexto = (
+        f"{pessoa.nome} — {pessoa.cargo_atual}" if pessoa.cargo_atual else pessoa.nome
+    )
+    entidades = extrair(texto, contexto)
     if entidades is None:
+        return
+
+    if not getattr(entidades, "texto_e_sobre_alvo", True):
+        logger.info(
+            f"Menção {mencao.id} descartada: homônimo detectado ({(mencao.titulo or mencao.url)[:60]})"
+        )
+        db.delete(mencao)
         return
 
     mencao.sentimento = entidades.sentimento
@@ -282,7 +298,18 @@ def _processar_mencao(
     if not pessoa.cargo_atual and entidades.cargo_pessoa_alvo:
         pessoa.cargo_atual = entidades.cargo_pessoa_alvo
 
-    evidencia = {"mencao_url": mencao.url, "titulo": mencao.titulo}
+    # Contexto da co-menção: lista/ranking ("50 mais ricos") não é relação
+    # genuína — rotulamos a evidência para o grafo exibir a diferença.
+    # Duas defesas: o rótulo do extrator LLM e a heurística de fan-out
+    # (matéria que cita 6+ pessoas juntas é quase sempre lista).
+    eh_lista = bool(getattr(entidades, "eh_lista_ou_ranking", False)) or (
+        len(entidades.pessoas_mencionadas) > 5
+    )
+    evidencia = {
+        "mencao_url": mencao.url,
+        "titulo": mencao.titulo,
+        "contexto": "lista" if eh_lista else "direta",
+    }
 
     for nome_empresa in entidades.empresas_mencionadas:
         _get_or_create_empresa(db, nome_empresa)

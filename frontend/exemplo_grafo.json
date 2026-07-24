@@ -1,5 +1,5 @@
 {
-  "_comentario": "Resposta de GET /grafo/1?profundidade=2&peso_minimo=1 — estrutura real, rede ilustrativa baseada nos dados do banco (Bartolomeo + co-mencionados reais).",
+  "_comentario": "GET /grafo/1?profundidade=2&peso_minimo=1 — formato v2 com evidências e contexto. Pode haver múltiplas arestas entre o mesmo par (tipos diferentes).",
   "nodes": [
     {
       "id": 1,
@@ -8,23 +8,36 @@
       "foto_url": "https://media.licdn.com/dms/image/v2/D4D03AQHkX3DGVyRLFA/profile-displayphoto-shrink_800_800/profile-displayphoto-shrink_800_800/0/1699281003851?e=1785369600&v=beta&t=y62UIK4ZKc2Ygzb97uSXgBwxUZWRia9DdAPcAEFCKYE",
       "raiz": true
     },
-    {
-      "id": 2,
-      "label": "Gustavo Pimenta",
-      "cargo_atual": "CEO da Vale",
-      "foto_url": null,
-      "raiz": false
-    },
-    {
-      "id": 7,
-      "label": "Eliezer Batista",
-      "cargo_atual": null,
-      "foto_url": null,
-      "raiz": false
-    }
+    { "id": 2, "label": "Gustavo Pimenta", "cargo_atual": "CEO da Vale", "foto_url": null, "raiz": false },
+    { "id": 7, "label": "Eliezer Batista", "cargo_atual": null, "foto_url": null, "raiz": false },
+    { "id": 9, "label": "Luiza Trajano", "cargo_atual": "Presidente do Conselho — Magazine Luiza", "foto_url": null, "raiz": false }
   ],
   "edges": [
-    { "source": 1, "target": 2, "tipo": "co_mencionado", "peso": 2 },
-    { "source": 1, "target": 7, "tipo": "co_mencionado", "peso": 1 }
+    {
+      "source": 1, "target": 2, "tipo": "co_mencionado", "peso": 3,
+      "evidencias": [
+        { "mencao_url": "https://valor.globo.com/empresas/noticia/2024/03/08/eduardo-bartolomeo-permanece-como-ceo-da-vale-ate-dezembro-deste-ano-2024-dizem-fontes.ghtml", "titulo": "Eduardo Bartolomeo permanece como CEO da Vale até dezembro", "contexto": "direta" },
+        { "mencao_url": "https://oglobo.globo.com/economia/noticia/2024/03/08/ceo-da-vale-eduardo-bartolomeo-sera-mantido-no-cargo-ate-dezembro.ghtml", "titulo": "CEO da Vale será mantido no cargo até dezembro", "contexto": "direta" },
+        { "mencao_url": "https://exame.com/negocios/executivos-mais-influentes-do-brasil/", "titulo": "Os 50 executivos mais influentes do Brasil", "contexto": "lista" }
+      ]
+    },
+    {
+      "source": 1, "target": 2, "tipo": "colega_empresa", "peso": 1,
+      "evidencias": [
+        { "fonte": "linkedin_cargos", "empresa": "Vale", "funcao_a": "Diretor Presidente", "funcao_b": "CFO" }
+      ]
+    },
+    {
+      "source": 1, "target": 7, "tipo": "co_mencionado", "peso": 1,
+      "evidencias": [
+        { "mencao_url": "https://valor.globo.com/conteudo-de-marca/vale/noticia/2024/06/27/bartolomeo-eliezer-ficaria-orgulhoso-em-ver-a-vale-pronta-para-o-futuro.ghtml", "titulo": "Bartolomeo: Eliezer ficaria orgulhoso em ver a Vale pronta", "contexto": "direta" }
+      ]
+    },
+    {
+      "source": 1, "target": 9, "tipo": "co_mencionado", "peso": 1,
+      "evidencias": [
+        { "mencao_url": "https://exame.com/negocios/executivos-mais-influentes-do-brasil/", "titulo": "Os 50 executivos mais influentes do Brasil", "contexto": "lista" }
+      ]
+    }
   ]
 }

@@ -60,6 +60,22 @@ class EntidadesExtraidas(BaseModel):
         default_factory=list,
         description="Principais temas (ex: ESG, M&A, transformação digital)",
     )
+    texto_e_sobre_alvo: bool = Field(
+        default=True,
+        description=(
+            "False se o texto claramente fala de OUTRA pessoa que apenas tem o "
+            "mesmo nome da pessoa-alvo (profissão/empresa/contexto incompatíveis "
+            "com a descrição do alvo). Na dúvida, true."
+        ),
+    )
+    eh_lista_ou_ranking: bool = Field(
+        default=False,
+        description=(
+            "True se o texto é uma lista/ranking/compilação de várias pessoas "
+            "(ex: '50 mais ricos', 'CEOs para acompanhar') em vez de uma matéria "
+            "sobre fatos ou interações reais entre elas"
+        ),
+    )
 
 
 # Schema da tool — o modelo é obrigado a chamá-la com essa estrutura exata.
@@ -119,6 +135,22 @@ EXTRATOR_TOOL: dict[str, Any] = {
                 "items": {"type": "string"},
                 "description": "Principais temas tratados no texto",
             },
+            "texto_e_sobre_alvo": {
+                "type": "boolean",
+                "description": (
+                    "False apenas se o texto claramente trata de um homônimo "
+                    "(outra pessoa com o mesmo nome, profissão/empresa "
+                    "incompatíveis). Na dúvida, true."
+                ),
+            },
+            "eh_lista_ou_ranking": {
+                "type": "boolean",
+                "description": (
+                    "True se o texto é lista/ranking/compilação de pessoas "
+                    "('50 mais ricos', 'CEOs para acompanhar'), false se é "
+                    "matéria sobre fatos ou interações reais"
+                ),
+            },
         },
         "required": [
             "eventos",
@@ -148,6 +180,12 @@ Diretrizes:
 - `datas`: use AAAA-MM-DD quando puder inferir o ano com segurança; caso contrário, omita.
 - `sentimento`: avalie o tom do texto sobre a pessoa-alvo especificamente, não o tom geral.
 - `temas`: termos curtos e canônicos (ESG, M&A, IPO, transformação digital, etc.).
+- `texto_e_sobre_alvo`: a descrição da pessoa-alvo pode incluir cargo e empresa.
+  Se o texto claramente fala de um homônimo (outra pessoa com o mesmo nome, mas
+  profissão/empresa/contexto incompatíveis), marque false. Na dúvida, true.
+- `eh_lista_ou_ranking`: marque true quando o texto for uma lista, ranking ou
+  compilação de várias pessoas (ex: "50 mais ricos do Brasil") — nesses textos,
+  pessoas aparecerem juntas NÃO indica relação real entre elas.
 - Sempre chame a tool exatamente uma vez, mesmo que algumas listas fiquem vazias.
 - Nunca devolva texto livre fora da tool."""
 
