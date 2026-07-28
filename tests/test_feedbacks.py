@@ -185,6 +185,32 @@ def test_busca_sem_linkedin_url_so_para_pessoa_existente(client, db):
     assert corpo["job_id"] is not None  # existente: re-coleta liberada
 
 
+# ---------- /acervo ----------
+
+
+def test_acervo_lista_pessoas_com_flag_de_briefing(client, db):
+    db.add_all(
+        [
+            Pessoa(slug="com-dossie", nome="Com Dossiê", cargo_atual="CEO",
+                   briefing="Briefing pronto."),
+            Pessoa(slug="sem-dossie", nome="Sem Dossiê"),
+        ]
+    )
+    db.commit()
+
+    corpo = client.get("/acervo").json()
+    assert corpo["total"] == 2
+    por_nome = {p["nome"]: p for p in corpo["pessoas"]}
+    assert por_nome["Com Dossiê"]["tem_briefing"] is True
+    assert por_nome["Sem Dossiê"]["tem_briefing"] is False
+    assert por_nome["Com Dossiê"]["cargo_atual"] == "CEO"
+
+
+def test_acervo_vazio(client):
+    corpo = client.get("/acervo").json()
+    assert corpo == {"total": 0, "pessoas": []}
+
+
 # ---------- /grafo com evidências ----------
 
 

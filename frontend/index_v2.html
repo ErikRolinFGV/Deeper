@@ -1,0 +1,1181 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Deeper — Pesquisa e inteligência de dados · FSB Holding</title>
+<meta name="description" content="Deeper — dossiês de inteligência sobre executivos brasileiros a partir de fontes públicas (LinkedIn + imprensa). Uso interno FSB Holding.">
+<meta name="theme-color" content="#0E0B07">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%230E0B07'/%3E%3Ctext x='32' y='46' font-family='Arial,sans-serif' font-size='40' font-weight='700' text-anchor='middle' fill='%23F5EFE6'%3Ed%3C/text%3E%3Ccircle cx='51' cy='46' r='5' fill='%23F5921E'/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;500;600;700;800;900&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/cytoscape/3.30.2/cytoscape.min.js"></script>
+<style>
+  :root {
+    --bg: #0E0B07; --sup1: #14100A; --sup2: #161109; --sup3: #18130C; --sup4: #1F180E;
+    --bd1: #211A11; --bd2: #251D13; --bd3: #332818; --bd4: #463822; --bd5: #4A3C26;
+    --tx1: #F5EFE6; --tx2: #EDE6DA; --tx3: #CFC3B0; --tx4: #B3A48E; --tx5: #8A7A64; --tx6: #5E5240;
+    --ac: #F5921E; --ac-l: #FFB25C; --ac-d: #E06D10;
+    --neg: #E5484D; --neu: #8A7A64; --pos: #46A758;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; background: var(--bg); color: var(--tx1); font-family: 'Nunito', 'Helvetica Neue', sans-serif; -webkit-font-smoothing: antialiased; }
+  a { color: var(--ac); text-decoration: none; }
+  a:hover { color: var(--ac-l); text-decoration: underline; }
+  input::placeholder { color: var(--tx5); }
+  button { font-family: 'Nunito', sans-serif; cursor: pointer; }
+  ::selection { background: rgba(245,146,30,0.35); }
+
+  @keyframes fadeup { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: translateY(0); } }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.4; } }
+  @keyframes gradmove { 0% { background-position: 0% 50%; } 50% { background-position: 100% 50%; } 100% { background-position: 0% 50%; } }
+  @keyframes drift1 { 0% { transform: translate(0,0) scale(1); } 50% { transform: translate(70px,-50px) scale(1.15); } 100% { transform: translate(-40px,30px) scale(0.95); } }
+  @keyframes drift2 { 0% { transform: translate(0,0) scale(1); } 50% { transform: translate(-80px,40px) scale(1.1); } 100% { transform: translate(50px,-30px) scale(1.05); } }
+  @keyframes shimmer { 0% { background-position: -400px 0; } 100% { background-position: 400px 0; } }
+
+  .tela { display: none; }
+  .tela.ativa { display: block; }
+
+  .orbes { position: fixed; inset: 0; overflow: hidden; pointer-events: none; z-index: 0; }
+  .orbe { position: absolute; border-radius: 50%; filter: blur(55px); }
+
+  /* ── wordmark ── */
+  .wordmark { font-family: 'Space Grotesk', 'Nunito', sans-serif; font-weight: 700; letter-spacing: -0.045em; line-height: 1; background: linear-gradient(180deg, #F5EFE6 40%, #FFB25C 78%, #F5921E); -webkit-background-clip: text; background-clip: text; color: transparent; }
+  .wordmark em { font-style: normal; -webkit-text-fill-color: var(--ac); color: var(--ac); }
+  @keyframes respira { 0%, 100% { opacity: 0.55; transform: scale(1); } 50% { opacity: 1; transform: scale(1.14); } }
+  .marca-grande { position: relative; }
+  .marca-grande::after { content: ''; position: absolute; left: 50%; top: 50%; width: 340px; height: 200px; transform: translate(-50%,-50%); background: radial-gradient(ellipse, rgba(245,146,30,0.16), transparent 70%); filter: blur(26px); z-index: -1; animation: respira 7s ease-in-out infinite; }
+  .font-display { font-family: 'Space Grotesk', 'Nunito', sans-serif; letter-spacing: -0.02em; }
+
+  /* ── BUSCA (layout com sidebar) ── */
+  .layout-busca { display: flex; min-height: 100vh; position: relative; z-index: 1; }
+  .sidebar { width: 236px; flex-shrink: 0; border-right: 1px solid var(--bd1); background: rgba(20,16,10,0.72); backdrop-filter: blur(8px); padding: 26px 14px; display: flex; flex-direction: column; gap: 26px; position: sticky; top: 0; height: 100vh; transition: margin-left 0.35s cubic-bezier(0.4,0,0.2,1); overflow: hidden; }
+  .layout-busca.side-off .sidebar { margin-left: -236px; }
+  .btn-side { position: fixed; top: 18px; left: 254px; z-index: 60; width: 34px; height: 34px; border-radius: 9px; background: var(--sup3); border: 1px solid var(--bd3); color: var(--tx4); font-size: 15px; display: flex; align-items: center; justify-content: center; transition: left 0.35s cubic-bezier(0.4,0,0.2,1), border-color 0.15s, color 0.15s; }
+  .btn-side:hover { border-color: var(--ac); color: var(--ac); }
+  .layout-busca.side-off ~ .btn-side, .side-off .btn-side { left: 14px; }
+  .btn-side .seta { display: inline-block; transition: transform 0.35s; }
+  .side-off .btn-side .seta { transform: rotate(180deg); }
+  .nav-item { display: flex; align-items: center; gap: 12px; padding: 10px 14px; border-radius: 9px; cursor: pointer; color: var(--tx4); font-size: 14px; font-weight: 600; transition: background 0.15s, color 0.15s; user-select: none; border-left: 2px solid transparent; }
+  .nav-item:hover { background: var(--sup4); color: var(--tx2); }
+  .nav-item.on { background: rgba(245,146,30,0.10); color: var(--ac); border-left-color: var(--ac); font-weight: 800; }
+  .nav-item .ico { width: 20px; text-align: center; font-size: 15px; flex-shrink: 0; }
+  .nav-item .cont { margin-left: auto; font-size: 11px; font-weight: 800; color: var(--tx5); background: var(--bd2); border-radius: 999px; padding: 1px 8px; }
+  .nav-item.on .cont { color: var(--ac); background: rgba(245,146,30,0.15); }
+  .painel-area { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+  .painel { display: none; }
+  .painel.on { display: block; animation: fadeup 0.35s ease both; }
+  .painel-pagina { max-width: 760px; margin: 0 auto; padding: 56px 32px 80px; display: flex; flex-direction: column; gap: 22px; }
+  .pag-titulo { font-family: 'Space Grotesk', sans-serif; font-size: 26px; font-weight: 700; color: var(--ac); letter-spacing: -0.02em; }
+  .pag-sub { font-size: 13.5px; color: var(--tx4); line-height: 1.55; margin-top: -12px; }
+  .lista-card { background: var(--sup2); border: 1px solid var(--bd2); border-radius: 12px; overflow: hidden; }
+  .dd-recentes { position: absolute; top: calc(100% + 6px); left: 0; right: 0; background: var(--sup1); border: 1px solid var(--bd3); border-radius: 12px; box-shadow: 0 20px 50px rgba(0,0,0,0.5); z-index: 20; overflow: hidden; animation: fadeup 0.2s ease both; }
+  @media (max-width: 860px) { .sidebar { width: 64px; padding: 22px 8px; } .layout-busca.side-off .sidebar { margin-left: -64px; } .btn-side { left: 78px; } .sidebar .nav-txt, .sidebar .cont, .sidebar .side-rodape, .sidebar .side-marca { display: none; } .nav-item { justify-content: center; padding: 12px 0; } }
+  .busca-wrap { min-height: 100vh; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 40px 24px; position: relative; z-index: 1; }
+  .busca-col { width: 100%; max-width: 720px; display: flex; flex-direction: column; align-items: center; gap: 30px; animation: fadeup 0.5s ease both; }
+  .busca-col > * { animation: fadeup 0.6s cubic-bezier(0.2,0.8,0.2,1) both; }
+  .busca-col > *:nth-child(1) { animation-delay: 0.05s; }
+  .busca-col > *:nth-child(2) { animation-delay: 0.16s; }
+  .busca-col > *:nth-child(3) { animation-delay: 0.27s; }
+  .busca-input-row input { animation: none; }
+  .busca-input-row { display: flex; gap: 10px; width: 100%; }
+  .busca-input-row input { flex: 1; background: var(--sup3); border: 1px solid var(--bd3); border-radius: 10px; padding: 17px 22px; font-size: 17px; color: var(--tx1); font-family: 'Nunito', sans-serif; outline: none; transition: border-color 0.2s, box-shadow 0.2s; }
+  .busca-input-row input:focus { border-color: var(--ac); box-shadow: 0 0 0 3px rgba(245,146,30,0.16); }
+  .btn-buscar { background: linear-gradient(120deg, var(--ac-l), var(--ac) 55%, var(--ac-d)); background-size: 200% 200%; animation: gradmove 6s ease infinite; color: #fff; border: none; border-radius: 10px; padding: 0 30px; font-size: 16px; font-weight: 700; transition: box-shadow 0.2s, transform 0.15s; box-shadow: 0 0 0 rgba(245,146,30,0); }
+  .btn-buscar:hover { box-shadow: 0 6px 28px rgba(245,146,30,0.5); transform: translateY(-1px); }
+  .btn-buscar:active { transform: translateY(0) scale(0.985); }
+
+  .sugestoes { width: 100%; background: var(--sup1); border: 1px solid var(--bd3); border-radius: 14px; overflow: hidden; box-shadow: 0 24px 60px rgba(0,0,0,0.5); animation: fadeup 0.3s ease both; }
+  .sug-header { padding: 14px 20px; border-bottom: 1px solid var(--bd1); display: flex; justify-content: space-between; align-items: center; }
+  .sug-secao-titulo { font-size: 11px; font-weight: 800; letter-spacing: 0.14em; text-transform: uppercase; color: var(--tx5); padding: 12px 20px 6px; display: flex; align-items: center; gap: 8px; }
+  .sug-item { display: flex; align-items: center; gap: 14px; padding: 12px 20px; cursor: pointer; transition: background 0.15s; border-left: 2px solid transparent; }
+  .sug-item:hover, .sug-item.kb { background: var(--sup4); border-left-color: var(--ac); }
+  .sug-avatar { width: 42px; height: 42px; border-radius: 50%; flex-shrink: 0; background: linear-gradient(135deg, rgba(255,178,92,0.28), rgba(224,109,16,0.28)); border: 1.5px solid var(--bd4); display: flex; align-items: center; justify-content: center; font-weight: 800; font-size: 14px; color: #fff; overflow: hidden; }
+  .sug-avatar img { width: 100%; height: 100%; object-fit: cover; }
+  .sug-nome { font-size: 15px; font-weight: 700; color: var(--tx1); }
+  .sug-sub { font-size: 12.5px; color: var(--tx4); margin-top: 1px; }
+  .badge-pronto { font-size: 10px; font-weight: 800; letter-spacing: 0.06em; text-transform: uppercase; color: var(--ac); border: 1px solid rgba(245,146,30,0.4); background: rgba(245,146,30,0.1); padding: 3px 9px; border-radius: 999px; margin-left: auto; flex-shrink: 0; }
+  .badge-li { margin-left: auto; flex-shrink: 0; font-size: 11px; color: var(--tx5); }
+
+  .toggle-row { display: flex; align-items: center; gap: 10px; cursor: pointer; user-select: none; }
+  .toggle { width: 36px; height: 20px; border-radius: 999px; padding: 2px; background: var(--bd3); transition: background 0.15s; flex-shrink: 0; }
+  .toggle .dot { width: 16px; height: 16px; border-radius: 50%; background: var(--tx5); transition: transform 0.15s, background 0.15s; }
+  .toggle.on { background: var(--ac); }
+  .toggle.on .dot { background: #fff; transform: translateX(16px); }
+
+  .hist-chip { display: flex; align-items: center; gap: 8px; background: var(--sup3); border: 1px solid var(--bd3); border-radius: 999px; padding: 7px 14px 7px 8px; transition: border-color 0.15s; }
+  .hist-chip:hover { border-color: var(--ac); }
+
+  .ajuda-card { background: var(--sup2); border: 1px solid var(--bd2); border-radius: 10px; padding: 14px 16px; }
+  .faq-det { background: var(--sup2); border: 1px solid var(--bd2); border-radius: 10px; overflow: hidden; }
+  .faq-det summary { list-style: none; cursor: pointer; padding: 12px 16px; font-size: 13.5px; font-weight: 700; color: var(--tx2); display: flex; align-items: center; gap: 10px; transition: color 0.15s; user-select: none; }
+  .faq-det summary::-webkit-details-marker { display: none; }
+  .faq-det summary::before { content: '+'; color: var(--ac); font-weight: 800; font-size: 15px; width: 14px; flex-shrink: 0; transition: transform 0.2s; }
+  .faq-det[open] summary::before { transform: rotate(45deg); }
+  .faq-det[open] summary { color: var(--ac); }
+  .faq-det summary:hover { color: var(--ac); }
+  .faq-det > div { padding-left: 40px !important; }
+
+  /* ── CARREGANDO / ERRO ── */
+  .centro-wrap { min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 24px; position: relative; z-index: 1; }
+  .etapa-row { display: flex; align-items: center; gap: 14px; padding: 13px 0; border-bottom: 1px solid var(--bd1); }
+  .etapa-icone { width: 22px; height: 22px; border-radius: 50%; flex-shrink: 0; display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 800; }
+  .etapa-pend .etapa-icone { border: 1.5px solid var(--bd3); }
+  .etapa-pend .etapa-nome { color: var(--tx6); }
+  .etapa-ativa .etapa-icone { border: 2px solid var(--ac); border-top-color: transparent; animation: spin 0.9s linear infinite; }
+  .etapa-ativa .etapa-nome { color: var(--tx1); font-weight: 700; }
+  .etapa-feita .etapa-icone { background: linear-gradient(135deg, var(--ac-l), var(--ac)); color: #fff; }
+  .etapa-feita .etapa-icone::before { content: '✓'; }
+  .etapa-feita .etapa-nome { color: var(--tx4); }
+  .etapa-nome { font-size: 14.5px; white-space: nowrap; }
+  .etapa-detalhe { margin-left: auto; font-size: 12px; color: var(--tx5); text-align: right; }
+  .btn-fantasma { background: transparent; color: var(--tx4); border: 1px solid var(--bd4); border-radius: 8px; padding: 9px 20px; font-size: 13.5px; font-weight: 600; transition: border-color 0.15s, color 0.15s; white-space: nowrap; }
+  .btn-fantasma:hover { border-color: var(--ac); color: var(--ac); }
+  .btn-solido { background: linear-gradient(120deg, var(--ac-l), var(--ac) 55%, var(--ac-d)); color: #fff; border: none; border-radius: 8px; padding: 10px 24px; font-size: 14px; font-weight: 800; transition: box-shadow 0.2s, transform 0.15s; white-space: nowrap; }
+  .btn-solido:hover { box-shadow: 0 6px 22px rgba(245,146,30,0.4); transform: translateY(-1px); }
+
+  /* ── DOSSIÊ ── */
+  .topbar { display: flex; align-items: center; gap: 14px; padding: 13px 32px; border-bottom: 1px solid var(--bd1); background: rgba(20,16,10,0.92); backdrop-filter: blur(8px); position: sticky; top: 0; z-index: 50; flex-wrap: wrap; }
+  @media (max-width: 1000px) { .sub-marca-top, #dos-atualizado { display: none; } }
+  .dossie-main { max-width: 1240px; margin: 0 auto; padding: 40px 32px 90px; display: flex; flex-direction: column; gap: 52px; }
+  .sec { opacity: 0; }
+  .sec.entra { animation: fadeup 0.55s ease both; }
+  .sec-titulo { font-family: 'Space Grotesk', sans-serif; font-size: 23px; color: var(--ac); font-weight: 700; letter-spacing: -0.02em; }
+  .sec-sub { font-size: 12.5px; color: var(--tx5); white-space: nowrap; }
+
+  .mencao-card { background: var(--sup2); border: 1px solid var(--bd2); border-radius: 10px; padding: 16px 18px; display: flex; flex-direction: column; gap: 10px; transition: border-color 0.2s, transform 0.2s, box-shadow 0.2s; }
+  .mencao-card:hover { border-color: var(--bd5); transform: translateY(-2px); box-shadow: 0 10px 28px rgba(0,0,0,0.35); }
+  .chip-tema { font-size: 11.5px; color: var(--tx4); border: 1px solid var(--bd3); padding: 2px 8px; border-radius: 999px; white-space: nowrap; }
+  .badge-fonte { font-size: 12px; font-weight: 700; color: var(--tx3); background: var(--bd2); padding: 3px 9px; border-radius: 4px; }
+
+  /* ── GRAFO ── */
+  .grafo-shell { background: radial-gradient(ellipse 70% 60% at 50% 40%, rgba(245,146,30,0.06), transparent), var(--sup1); border: 1px solid var(--bd2); border-radius: 14px; overflow: hidden; position: relative; }
+  .grafo-shell.fullscreen { position: fixed; inset: 0; z-index: 200; border-radius: 0; }
+  .grafo-toolbar { display: flex; align-items: center; gap: 18px; flex-wrap: wrap; padding: 14px 18px; border-bottom: 1px solid var(--bd1); background: rgba(22,17,9,0.7); position: relative; z-index: 5; }
+  .grafo-canvas { width: 100%; height: 560px; }
+  .grafo-shell.fullscreen .grafo-canvas { height: calc(100vh - 118px); }
+  .ctl-grupo { display: flex; align-items: center; gap: 8px; }
+  .ctl-label { font-size: 11.5px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--tx5); }
+  .ctl-seg { display: flex; border: 1px solid var(--bd3); border-radius: 7px; overflow: hidden; }
+  .ctl-seg button { background: transparent; border: none; color: var(--tx4); font-size: 12.5px; font-weight: 700; padding: 5px 12px; }
+  .ctl-seg button.on { background: var(--ac); color: #fff; }
+  .ctl-seg button:not(.on):hover { background: var(--sup4); color: var(--tx2); }
+  .legenda { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; padding: 10px 18px; border-top: 1px solid var(--bd1); background: rgba(22,17,9,0.7); font-size: 12px; color: var(--tx4); position: relative; z-index: 5; }
+  .leg-item { display: flex; align-items: center; gap: 7px; }
+  .leg-linha { width: 26px; height: 0; border-top-width: 3px; border-top-style: solid; }
+  .grafo-card { position: absolute; background: rgba(31,24,14,0.97); border: 1px solid var(--bd4); border-radius: 12px; box-shadow: 0 16px 48px rgba(0,0,0,0.55); z-index: 10; animation: fadeup 0.25s ease both; }
+  .evid-item { display: flex; flex-direction: column; gap: 2px; padding: 9px 0; border-bottom: 1px solid var(--bd1); }
+  .evid-item:last-child { border-bottom: none; }
+  .tag-lista { font-size: 10px; font-weight: 800; letter-spacing: 0.06em; text-transform: uppercase; color: var(--tx5); border: 1px dashed var(--bd4); padding: 1px 7px; border-radius: 999px; }
+  .tag-direta { font-size: 10px; font-weight: 800; letter-spacing: 0.06em; text-transform: uppercase; color: var(--pos); border: 1px solid rgba(70,167,88,0.35); padding: 1px 7px; border-radius: 999px; }
+
+  /* trajetória */
+  .traj-item { display: grid; grid-template-columns: 14px 1fr; gap: 14px; }
+  .traj-col { display: flex; flex-direction: column; align-items: center; }
+  .traj-linha { width: 1px; flex: 1; background: var(--bd3); }
+  .badge-atual { font-size: 10.5px; font-weight: 800; color: #fff; background: linear-gradient(120deg, var(--ac), var(--ac-d)); padding: 2px 7px; border-radius: 4px; letter-spacing: 0.05em; text-transform: uppercase; }
+
+  .grid-dossie { display: grid; grid-template-columns: minmax(0,1fr) 320px; gap: 56px; align-items: start; }
+  @media (max-width: 940px) {
+    .grid-dossie { grid-template-columns: 1fr; }
+    .dossie-main { padding: 28px 20px 70px; }
+    .grafo-canvas { height: 440px; }
+  }
+  .skel { background: linear-gradient(90deg, var(--sup2) 25%, var(--sup4) 50%, var(--sup2) 75%); background-size: 800px 100%; animation: shimmer 1.4s linear infinite; border-radius: 8px; }
+  .btn-mini { background: transparent; color: var(--tx4); border: 1px solid var(--bd3); border-radius: 7px; padding: 5px 13px; font-size: 12px; font-weight: 700; transition: border-color 0.15s, color 0.15s; white-space: nowrap; }
+  .btn-mini:hover { border-color: var(--ac); color: var(--ac); }
+  .chip-idade { font-size: 11.5px; font-weight: 700; padding: 3px 10px; border-radius: 999px; white-space: nowrap; }
+  .vazio { padding: 20px 4px; font-size: 13.5px; color: var(--tx5); line-height: 1.55; }
+
+  /* ── impressão (Exportar PDF): converte para tema claro via variáveis ── */
+  @media print {
+    :root { --bg: #fff; --sup1: #fff; --sup2: #FAF7F2; --sup3: #FAF7F2; --sup4: #F2EDE4;
+      --bd1: #E4DDD2; --bd2: #E4DDD2; --bd3: #D5CCBD; --bd4: #C2B7A4; --bd5: #C2B7A4;
+      --tx1: #1A130B; --tx2: #2A2115; --tx3: #4A3C26; --tx4: #6E5F49; --tx5: #8A7A64; --tx6: #B3A48E; }
+    body { background: #fff !important; }
+    .orbes, .topbar button, #sec-grafo, .btn-side, .sidebar { display: none !important; }
+    .topbar { position: static; background: #fff; }
+    .sec { opacity: 1 !important; animation: none !important; }
+    .mencao-card, .ajuda-card, .faq-det { break-inside: avoid; }
+    .grid-dossie { grid-template-columns: 1fr; gap: 32px; }
+    .dossie-main { padding: 20px 0 40px; }
+    a { color: #E06D10; }
+  }
+</style>
+</head>
+<body>
+
+<div class="orbes" id="orbes">
+  <canvas id="bg-rede" style="position:absolute;inset:0;width:100%;height:100%;"></canvas>
+  <div class="orbe" style="top:-140px;left:8%;width:480px;height:480px;background:radial-gradient(circle, rgba(245,146,30,0.20), transparent 65%);animation:drift1 16s ease-in-out infinite alternate;"></div>
+  <div class="orbe" style="bottom:-180px;right:4%;width:540px;height:540px;background:radial-gradient(circle, rgba(224,109,16,0.13), transparent 65%);animation:drift2 20s ease-in-out infinite alternate;"></div>
+  <div class="orbe" style="top:30%;right:26%;width:320px;height:320px;background:radial-gradient(circle, rgba(255,178,92,0.10), transparent 65%);animation:drift1 24s ease-in-out infinite alternate-reverse;"></div>
+</div>
+
+<!-- ════════ BUSCA (landing com sidebar) ════════ -->
+<div class="tela ativa" id="tela-busca">
+  <div class="layout-busca" id="layout-busca">
+    <button class="btn-side" onclick="alternarSidebar()" title="Mostrar/esconder menu"><span class="seta">❮</span></button>
+    <aside class="sidebar">
+      <div class="side-marca" style="padding:0 14px;cursor:pointer;" onclick="trocarAba('pesquisa')" title="Ir para a pesquisa">
+        <div class="wordmark" style="font-size:27px;">deeper<em>.</em></div>
+        <div style="font-size:9px;font-weight:700;color:var(--tx5);letter-spacing:0.08em;margin-top:5px;">Pesquisa e inteligência de dados<br>FSB Holding</div>
+      </div>
+      <nav style="display:flex;flex-direction:column;gap:4px;">
+        <div class="nav-item on" data-aba="pesquisa" onclick="trocarAba('pesquisa')"><span class="ico">⌕</span><span class="nav-txt">Pesquisar</span></div>
+        <div class="nav-item" data-aba="historico" onclick="trocarAba('historico')"><span class="ico">◷</span><span class="nav-txt">Histórico</span><span class="cont" id="cont-hist">0</span></div>
+        <div class="nav-item" data-aba="acervo" onclick="trocarAba('acervo')"><span class="ico">▤</span><span class="nav-txt">Acervo</span><span class="cont" id="cont-acervo">1</span></div>
+        <div class="nav-item" data-aba="faq" onclick="trocarAba('faq')"><span class="ico">?</span><span class="nav-txt">FAQ</span></div>
+        <div class="nav-item" data-aba="status" onclick="trocarAba('status')"><span class="ico">◉</span><span class="nav-txt">Status</span></div>
+      </nav>
+      <div class="side-rodape" style="margin-top:auto;padding:0 14px;font-size:11px;color:var(--tx6);line-height:1.6;">Uso interno · FSB Holding<br>Fontes públicas: LinkedIn + imprensa</div>
+    </aside>
+    <div class="painel-area">
+
+      <div class="painel on" id="painel-pesquisa">
+        <div class="busca-wrap" style="min-height:100vh;">
+          <div class="busca-col">
+            <div style="display:flex;flex-direction:column;align-items:center;gap:10px;" class="marca-grande">
+              <div class="wordmark" style="font-size:64px;">deeper<em>.</em></div>
+              <div style="font-size:14px;font-weight:700;color:var(--tx3);letter-spacing:0.02em;">Pesquisa e inteligência de dados <span style="color:var(--tx5);">· FSB Holding</span></div>
+              <div style="font-size:12px;color:var(--tx5);font-style:italic;">Quem é, o que pensa, como a mídia o trata, quem conhece.</div>
+            </div>
+            <div style="width:100%;display:flex;flex-direction:column;gap:12px;">
+              <div class="busca-input-row" style="position:relative;">
+                <input id="inp-busca" placeholder="Pesquisar executivo por nome, cargo ou empresa… (ex.: CEO do Nubank)" autocomplete="off">
+                <button class="btn-buscar" onclick="submeterBusca()">Pesquisar</button>
+                <div id="dd-recentes" class="dd-recentes" style="display:none;"></div>
+              </div>
+              <div id="painel-sugestoes" style="display:none;"></div>
+            </div>
+            <div style="display:flex;flex-direction:column;align-items:center;gap:12px;">
+              <div class="toggle-row" onclick="alternarForcar()">
+                <div class="toggle" id="tgl-forcar"><div class="dot"></div></div>
+                <span style="font-size:13px;color:var(--tx4);">Forçar nova coleta <span style="color:var(--tx5);">(ignora o cache de 7 dias)</span></span>
+              </div>
+              <div style="font-size:13px;color:var(--tx5);">Você confirma a pessoa antes da coleta começar — a coleta leva de 20 a 60 segundos.</div>
+              <div style="font-size:13px;color:var(--tx5);">Experimente:
+                <a href="#" onclick="rebuscar('Eduardo Bartolomeo');return false;" style="font-weight:700;">Eduardo Bartolomeo</a> ·
+                <a href="#" onclick="rebuscar('CEO da Vale');return false;" style="font-weight:700;">CEO da Vale</a>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="painel" id="painel-acervo">
+        <div class="painel-pagina">
+          <div class="pag-titulo">Acervo</div>
+          <div class="pag-sub">Executivos já coletados — o dossiê abre na hora, sem nova coleta. Dossiês ficam válidos por 7 dias; depois disso uma pesquisa recoleta automaticamente.</div>
+          <div class="lista-card" id="lista-acervo"></div>
+        </div>
+      </div>
+
+      <div class="painel" id="painel-historico">
+        <div class="painel-pagina">
+          <div style="display:flex;align-items:baseline;justify-content:space-between;">
+            <div class="pag-titulo">Histórico</div>
+            <span onclick="limparHistorico()" style="font-size:12.5px;color:var(--tx5);cursor:pointer;">limpar histórico</span>
+          </div>
+          <div class="pag-sub">Pesquisas desta sessão. Clique para pesquisar de novo — se a pessoa está no acervo, o dossiê abre na hora.</div>
+          <div class="lista-card" id="lista-historico-pg"></div>
+        </div>
+      </div>
+
+      <div class="painel" id="painel-faq">
+        <div class="painel-pagina">
+          <div class="pag-titulo">FAQ — como usar</div>
+          <div class="pag-sub">O essencial para tirar o máximo da ferramenta em uma demo ou no dia a dia. Clique numa pergunta para expandir.</div>
+          <div id="grade-ajuda" style="display:flex;flex-direction:column;gap:6px;"></div>
+        </div>
+      </div>
+
+      <div class="painel" id="painel-status">
+        <div class="painel-pagina">
+          <div class="pag-titulo">Status do sistema</div>
+          <div class="pag-sub">Saúde da API e das fontes de coleta.</div>
+          <div class="lista-card" id="lista-status"></div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<!-- ════════ CARREGANDO ════════ -->
+<div class="tela" id="tela-carregando">
+  <div class="centro-wrap">
+    <div style="display:flex;flex-direction:column;gap:34px;width:100%;max-width:490px;animation:fadeup 0.4s ease both;">
+      <div style="display:flex;flex-direction:column;gap:8px;">
+        <div style="font-size:12px;color:var(--tx4);letter-spacing:0.12em;text-transform:uppercase;font-weight:800;">Montando dossiê</div>
+        <div id="carr-nome" class="font-display" style="font-size:28px;font-weight:700;"></div>
+        <div id="carr-headline" style="font-size:13.5px;color:var(--tx4);"></div>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:10px;">
+        <div style="height:3px;background:var(--bd2);border-radius:2px;overflow:hidden;">
+          <div id="barra-prog" style="height:100%;width:0%;background:linear-gradient(90deg,var(--ac-l),var(--ac),var(--ac-d));background-size:200% 100%;animation:gradmove 3s ease infinite;border-radius:2px;transition:width 0.2s linear;box-shadow:0 0 12px rgba(245,146,30,0.5);"></div>
+        </div>
+        <div style="display:flex;justify-content:space-between;font-size:13px;color:var(--tx4);">
+          <span id="etapa-nome-atual"></span><span id="prog-pct" style="font-variant-numeric:tabular-nums;">0%</span>
+        </div>
+      </div>
+      <div id="lista-etapas"></div>
+      <div style="display:flex;flex-direction:column;gap:8px;align-items:flex-start;">
+        <button class="btn-fantasma" onclick="cancelarColeta()">Cancelar e voltar</button>
+        <div style="font-size:12px;color:var(--tx5);">Ao cancelar, a coleta continua no servidor e o resultado fica no cache — a próxima busca por esta pessoa será instantânea.</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ════════ ERRO ════════ -->
+<div class="tela" id="tela-erro">
+  <div class="centro-wrap">
+    <div style="display:flex;flex-direction:column;gap:26px;width:100%;max-width:470px;animation:fadeup 0.4s ease both;">
+      <div style="width:54px;height:54px;border-radius:14px;background:rgba(229,72,77,0.12);border:1px solid rgba(229,72,77,0.35);display:flex;align-items:center;justify-content:center;font-size:24px;color:var(--neg);font-weight:800;">!</div>
+      <div style="display:flex;flex-direction:column;gap:8px;">
+        <div id="erro-titulo" class="font-display" style="font-size:26px;font-weight:700;">A coleta falhou</div>
+        <div id="erro-sub" style="font-size:14px;color:var(--tx4);line-height:1.55;"></div>
+      </div>
+      <div style="background:var(--sup2);border:1px solid var(--bd3);border-left:3px solid var(--neg);border-radius:8px;padding:14px 16px;">
+        <div style="font-size:11px;font-weight:800;letter-spacing:0.1em;text-transform:uppercase;color:var(--tx5);margin-bottom:5px;">Causa reportada pelo servidor</div>
+        <div id="erro-causa" style="font-size:13.5px;color:var(--tx2);line-height:1.5;font-variant-ligatures:none;"></div>
+      </div>
+      <div style="display:flex;gap:12px;">
+        <button class="btn-solido" onclick="tentarNovamente()">Tentar novamente</button>
+        <button class="btn-fantasma" onclick="voltarBusca()">Voltar</button>
+      </div>
+      <div style="font-size:12px;color:var(--tx5);">"Tentar novamente" repete a mesma seleção — você não precisa procurar a pessoa de novo.</div>
+    </div>
+  </div>
+</div>
+
+<!-- ════════ DOSSIÊ ════════ -->
+<div class="tela" id="tela-dossie">
+  <div style="height:3px;background:var(--ac);"></div>
+  <div class="topbar">
+    <div class="wordmark" style="font-size:24px;cursor:pointer;" onclick="voltarBusca()">deeper<em>.</em></div>
+    <div class="sub-marca-top" style="font-size:11.5px;font-weight:600;color:var(--tx5);padding-top:4px;">Pesquisa e inteligência de dados · FSB Holding</div>
+    <div style="margin-left:auto;display:flex;align-items:center;gap:12px;">
+      <span id="chip-idade" class="chip-idade" style="display:none;"></span>
+      <div id="dos-atualizado" style="font-size:12px;color:var(--tx5);"></div>
+      <button class="btn-mini" onclick="window.print()" title="Gera um PDF pelo diálogo de impressão">Exportar PDF</button>
+      <button class="btn-fantasma" style="color:var(--ac);white-space:nowrap;" onclick="atualizarDossie()">Atualizar dossiê</button>
+    </div>
+  </div>
+  <div class="dossie-main">
+    <div class="sec" id="sec-cab" style="display:flex;align-items:center;gap:28px;flex-wrap:wrap;">
+      <div id="dos-foto"></div>
+      <div style="display:flex;flex-direction:column;gap:8px;min-width:260px;flex:1;">
+        <h1 id="dos-nome" class="font-display" style="margin:0;font-size:38px;font-weight:700;"></h1>
+        <div id="dos-cargo" style="font-size:16px;color:var(--tx3);"></div>
+        <div style="display:flex;align-items:center;gap:18px;font-size:13px;">
+          <a id="dos-linkedin" href="#" target="_blank" rel="noopener">Perfil no LinkedIn ↗</a>
+        </div>
+      </div>
+    </div>
+    <div class="sec" id="sec-brief" style="display:flex;flex-direction:column;gap:18px;">
+      <div style="height:4px;width:56px;border-radius:2px;background:var(--ac);"></div>
+      <div style="display:flex;align-items:center;gap:14px;">
+        <div class="font-display" style="font-size:27px;color:var(--ac);font-weight:700;">Briefing executivo</div>
+        <button class="btn-mini" id="btn-copiar" onclick="copiarBriefing()">Copiar texto</button>
+      </div>
+      <div id="dos-briefing" style="display:flex;flex-direction:column;gap:20px;max-width:840px;"></div>
+    </div>
+
+    <!-- GRAFO protagonista -->
+    <div class="sec" id="sec-grafo" style="display:flex;flex-direction:column;gap:18px;">
+      <div style="display:flex;align-items:baseline;gap:12px;flex-wrap:wrap;">
+        <div class="sec-titulo">Rede de conexões</div>
+        <div class="sec-sub" id="grafo-contadores"></div>
+      </div>
+      <div class="grafo-shell" id="grafo-shell">
+        <div class="grafo-toolbar">
+          <div class="ctl-grupo"><span class="ctl-label">Profundidade</span>
+            <div class="ctl-seg" id="ctl-prof"><button data-v="1">1</button><button data-v="2" class="on">2</button><button data-v="3">3</button></div>
+          </div>
+          <div class="ctl-grupo"><span class="ctl-label">Peso mín.</span>
+            <div class="ctl-seg" id="ctl-peso"><button data-v="1" class="on">1</button><button data-v="2">2</button><button data-v="3">3</button></div>
+          </div>
+          <div class="toggle-row" onclick="alternarFiltroLista()">
+            <div class="toggle" id="tgl-lista"><div class="dot"></div></div>
+            <span style="font-size:12.5px;color:var(--tx4);">Ocultar conexões de lista/ranking</span>
+          </div>
+          <div style="margin-left:auto;display:flex;gap:8px;">
+            <button class="btn-fantasma" style="padding:6px 14px;font-size:12.5px;" onclick="recentrarGrafo()">Recentrar</button>
+            <button class="btn-fantasma" style="padding:6px 14px;font-size:12.5px;" id="btn-fs" onclick="alternarFullscreen()">⤢ Expandir</button>
+          </div>
+        </div>
+        <div id="cy" class="grafo-canvas"></div>
+        <div id="card-no" class="grafo-card" style="display:none;left:16px;bottom:52px;padding:14px 18px;min-width:230px;max-width:340px;"></div>
+        <div id="card-aresta" class="grafo-card" style="display:none;right:16px;top:70px;width:min(380px,calc(100% - 32px));max-height:70%;overflow:auto;padding:16px 18px;"></div>
+        <div class="legenda">
+          <span style="font-weight:800;letter-spacing:0.08em;text-transform:uppercase;font-size:10.5px;color:var(--tx5);">Legenda</span>
+          <span class="leg-item"><span class="leg-linha" style="border-top-color:var(--ac);"></span>laço formal (colegas / conselho)</span>
+          <span class="leg-item"><span class="leg-linha" style="border-top-color:#8A7A64;"></span>co-mencionados na imprensa</span>
+          <span class="leg-item"><span class="leg-linha" style="border-top-color:#B08D5E;border-top-style:dotted;"></span>co-participação em evento</span>
+          <span class="leg-item"><span class="leg-linha" style="border-top-color:#5E5240;border-top-style:dashed;"></span>apenas listas/rankings — não é relação genuína</span>
+          <span style="margin-left:auto;color:var(--tx5);">clique na linha para ver as evidências · clique no nó para detalhes</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="grid-dossie">
+      <div style="display:flex;flex-direction:column;gap:52px;min-width:0;">
+        <div class="sec" id="sec-menc" style="display:flex;flex-direction:column;gap:18px;">
+          <div style="display:flex;align-items:baseline;gap:10px;"><div class="sec-titulo">Menções na imprensa</div><div class="sec-sub" id="menc-total"></div></div>
+          <div id="lista-mencoes" style="display:flex;flex-direction:column;gap:10px;"></div>
+        </div>
+        <div class="sec" id="sec-even" style="display:flex;flex-direction:column;gap:18px;">
+          <div class="sec-titulo">Eventos</div>
+          <div id="lista-eventos" style="display:flex;flex-direction:column;"></div>
+        </div>
+      </div>
+      <div class="sec" id="sec-traj" style="display:flex;flex-direction:column;gap:18px;">
+        <div class="sec-titulo">Trajetória</div>
+        <div id="lista-cargos" style="display:flex;flex-direction:column;"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+/* ═══════════════ ACESSO A DADOS — API REAL ═══════════════ */
+const API_BASE = 'http://localhost:8000'; // trocar pela URL de produção no deploy
+const POLL_MS = 2500;        // intervalo do polling de GET /job/{id}
+const POLL_TIMEOUT_MS = 180000;
+const esperar = ms => new Promise(r => setTimeout(r, ms));
+
+class ErroAPI extends Error {}
+
+async function fetchJSON(url, opts) {
+  let r;
+  try {
+    r = await fetch(url, opts);
+  } catch (e) {
+    throw new ErroAPI(`Sem conexão com a API em ${API_BASE}. O servidor está rodando? (uvicorn app.main:app --reload)`);
+  }
+  if (!r.ok) {
+    let det = `A API respondeu HTTP ${r.status}`;
+    try { const j = await r.json(); if (j.detail) det = j.detail; } catch (_) {}
+    throw new ErroAPI(det);
+  }
+  return r.json();
+}
+
+async function buscarSugestoes(q) {
+  // GET /sugestoes — locais (banco, grátis) + linkedin (SerpAPI, 1 busca)
+  try {
+    return await fetchJSON(`${API_BASE}/sugestoes?q=${encodeURIComponent(q)}&externas=true`);
+  } catch (e) {
+    return { locais: [], linkedin: [], erro: e.message };
+  }
+}
+
+async function carregarAcervo() {
+  // GET /acervo — usado pela aba Acervo, pelo histórico e pelo card do grafo
+  try {
+    const d = await fetchJSON(`${API_BASE}/acervo`);
+    estado.acervo = d.pessoas || [];
+  } catch (e) {
+    estado.acervo = [];
+    estado.acervoErro = e.message;
+  }
+  return estado.acervo;
+}
+
+async function iniciarColeta(nome, linkedinUrl, forceRefresh) {
+  // POST /busca → (cache_hit ? direto) : polling GET /job/{id} até done/failed
+  try {
+    const body = { nome, force_refresh: !!forceRefresh };
+    if (linkedinUrl) body.linkedin_url = linkedinUrl;
+    const busca = await fetchJSON(`${API_BASE}/busca`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body)
+    });
+
+    if (busca.cache_hit && busca.pessoa_id) return { ok: true, pessoa_id: busca.pessoa_id };
+    if (!busca.job_id) return { ok: false, erro: busca.mensagem || 'A API não iniciou a coleta.' };
+
+    const t0 = Date.now();
+    while (true) {
+      await esperar(POLL_MS);
+      if (estado.cancelado) return { ok: false, cancelado: true, erro: 'cancelado' };
+      const job = await fetchJSON(`${API_BASE}/job/${busca.job_id}`);
+      if (job.status === 'done') return { ok: true, pessoa_id: job.pessoa_id };
+      if (job.status === 'failed') {
+        return { ok: false, erro: job.erro || 'A coleta falhou no servidor. Verifique o log do worker.' };
+      }
+      if (Date.now() - t0 > POLL_TIMEOUT_MS) {
+        return { ok: false, erro: 'A coleta excedeu o tempo limite de 3 minutos. O worker está rodando? (python scripts\\rodar_worker.py)' };
+      }
+    }
+  } catch (e) {
+    return { ok: false, erro: e.message };
+  }
+}
+
+async function carregarPerfil(pessoaId) {
+  return fetchJSON(`${API_BASE}/perfil/${pessoaId}?limite_mencoes=50`);
+}
+
+async function carregarGrafo(pessoaId, profundidade, pesoMinimo) {
+  try {
+    return await fetchJSON(`${API_BASE}/grafo/${pessoaId}?profundidade=${profundidade}&peso_minimo=${pesoMinimo}`);
+  } catch (e) {
+    return { nodes: [], edges: [] }; // grafo é complemento: falha não derruba o dossiê
+  }
+}
+
+/* ═══════════════ ESTADO + HELPERS ═══════════════ */
+const estado = {
+  forcar: false, historico: [], ajuda: false, kbIdx: -1,
+  selecao: null,            // { nome, headline, linkedin_url?, pessoa_id?, local }
+  timers: [], intervalo: null, cancelado: false,
+  perfil: null, cy: null,
+  prof: 2, pesoMin: 1, ocultarLista: false,
+  acervo: [], acervoErro: null, forcarProxima: false
+};
+const $ = id => document.getElementById(id);
+const MESES = ['jan','fev','mar','abr','mai','jun','jul','ago','set','out','nov','dez'];
+const FONTES = { oglobo: 'O Globo', valor: 'Valor', estadao: 'Estadão', infomoney: 'InfoMoney', exame: 'Exame', outros: 'Outros' };
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+function fmtData(iso) { if (!iso) return 'data não informada'; const [a,m,d] = iso.slice(0,10).split('-').map(Number); return `${String(d).padStart(2,'0')} ${MESES[m-1]} ${a}`; }
+function fmtPeriodo(c) { const i = c.inicio ? c.inicio.slice(0,4) : null, f = c.fim ? c.fim.slice(0,4) : null;
+  if (i && f) return `${i} – ${f}`; if (i && c.eh_atual) return `${i} – atual`; if (i) return `desde ${i}`; return 'período não informado'; }
+function iniciais(nome) { return (nome||'').split(/\s+/).filter(Boolean).slice(0,2).map(w=>w[0]).join('').toUpperCase(); }
+/* ═══════════════ FUNDO VIVO — rede de conexões que respira ═══════════════ */
+(function fundoRede() {
+  const cv = $('bg-rede'), ctx = cv.getContext('2d');
+  let W = 0, H = 0, pts = [], raf = null, t = 0;
+  const mouse = { x: -9999, y: -9999 };
+  const DPR = Math.min(window.devicePixelRatio || 1, 2);
+
+  function dimensionar() {
+    W = cv.clientWidth; H = cv.clientHeight;
+    cv.width = W * DPR; cv.height = H * DPR;
+    ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+    const alvo = Math.round(Math.min(64, Math.max(26, (W * H) / 26000)));
+    pts = Array.from({ length: alvo }, () => ({
+      x: Math.random() * W, y: Math.random() * H,
+      vx: (Math.random() - 0.5) * 0.16, vy: (Math.random() - 0.5) * 0.16,
+      r: Math.random() * 1.6 + 0.9, f: Math.random() * Math.PI * 2,
+      hub: Math.random() < 0.12
+    }));
+  }
+  function quadro() {
+    t += 0.006;
+    ctx.clearRect(0, 0, W, H);
+    const LIG = 168;
+    for (let i = 0; i < pts.length; i++) {
+      const a = pts[i];
+      a.x += a.vx; a.y += a.vy;
+      if (a.x < -30) a.x = W + 30; if (a.x > W + 30) a.x = -30;
+      if (a.y < -30) a.y = H + 30; if (a.y > H + 30) a.y = -30;
+      for (let j = i + 1; j < pts.length; j++) {
+        const b = pts[j], dx = a.x - b.x, dy = a.y - b.y, d = Math.hypot(dx, dy);
+        if (d > LIG) continue;
+        const perto = Math.min(
+          Math.hypot((a.x + b.x) / 2 - mouse.x, (a.y + b.y) / 2 - mouse.y) / 260, 1);
+        const base = (1 - d / LIG) * 0.16;
+        const alpha = base * (1 + (1 - perto) * 1.9);
+        ctx.strokeStyle = `rgba(245,146,30,${alpha.toFixed(3)})`;
+        ctx.lineWidth = 0.7 + (1 - perto) * 0.5;
+        ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke();
+      }
+    }
+    for (const p of pts) {
+      const pulso = 0.55 + 0.45 * Math.sin(t * 1.6 + p.f);
+      const dm = Math.min(Math.hypot(p.x - mouse.x, p.y - mouse.y) / 220, 1);
+      const raio = (p.hub ? p.r * 2.1 : p.r) * (1 + (1 - dm) * 0.5);
+      const op = (p.hub ? 0.42 : 0.24) * pulso * (1 + (1 - dm) * 1.4);
+      ctx.beginPath(); ctx.arc(p.x, p.y, raio, 0, Math.PI * 2);
+      ctx.fillStyle = `rgba(255,178,92,${Math.min(op, 0.85).toFixed(3)})`;
+      ctx.fill();
+      if (p.hub) {
+        ctx.beginPath(); ctx.arc(p.x, p.y, raio + 3.5 + pulso * 2.5, 0, Math.PI * 2);
+        ctx.strokeStyle = `rgba(245,146,30,${(0.14 * pulso).toFixed(3)})`;
+        ctx.lineWidth = 1; ctx.stroke();
+      }
+    }
+    raf = requestAnimationFrame(quadro);
+  }
+  window.pausarFundo = p => {
+    if (p) { if (raf) cancelAnimationFrame(raf); raf = null; }
+    else if (!raf) { dimensionar(); raf = requestAnimationFrame(quadro); }
+  };
+  addEventListener('resize', () => { if (raf) dimensionar(); });
+  addEventListener('mousemove', e => { mouse.x = e.clientX; mouse.y = e.clientY; });
+  addEventListener('mouseout', () => { mouse.x = mouse.y = -9999; });
+  if (!matchMedia('(prefers-reduced-motion: reduce)').matches) { dimensionar(); raf = requestAnimationFrame(quadro); }
+})();
+
+/* placeholder que se reescreve — mostra o alcance da busca */
+(function placeholderVivo() {
+  const inp = $('inp-busca');
+  const frases = ['Pesquisar executivo por nome, cargo ou empresa…', 'CEO do Nubank', 'Eduardo Bartolomeo', 'diretora de sustentabilidade da Natura', 'presidente do conselho da Vale'];
+  if (matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+  let fi = 0, ci = 0, apagando = false, pausa = 0;
+  setInterval(() => {
+    if (document.activeElement === inp || inp.value) { inp.placeholder = frases[0]; return; }
+    if (pausa > 0) { pausa--; return; }
+    const alvo = frases[fi];
+    if (!apagando) {
+      ci++; inp.placeholder = alvo.slice(0, ci) + '│';
+      if (ci >= alvo.length) { apagando = true; pausa = 28; inp.placeholder = alvo; }
+    } else {
+      ci -= 2; inp.placeholder = alvo.slice(0, Math.max(0, ci)) + '│';
+      if (ci <= 0) { apagando = false; ci = 0; fi = (fi + 1) % frases.length; pausa = 4; }
+    }
+  }, 55);
+})();
+
+function mostrarTela(nome) {
+  document.querySelectorAll('.tela').forEach(t => t.classList.remove('ativa'));
+  $('tela-' + nome).classList.add('ativa');
+  $('orbes').style.display = (nome === 'dossie') ? 'none' : 'block';
+  if (window.pausarFundo) window.pausarFundo(nome === 'dossie');
+  window.scrollTo(0, 0);
+}
+function limparTimers() { estado.timers.forEach(clearTimeout); estado.timers = []; clearInterval(estado.intervalo); }
+
+/* ═══════════════ BUSCA + SUGESTÕES ═══════════════ */
+function alternarForcar() { estado.forcar = !estado.forcar; $('tgl-forcar').classList.toggle('on', estado.forcar); }
+
+/* ── abas da landing ── */
+function alternarSidebar() { $('layout-busca').classList.toggle('side-off'); }
+function trocarAba(aba) {
+  document.querySelectorAll('.nav-item').forEach(n => n.classList.toggle('on', n.dataset.aba === aba));
+  document.querySelectorAll('.painel').forEach(p => p.classList.toggle('on', p.id === 'painel-' + aba));
+  fecharSugestoes(); esconderRecentes();
+  if (aba === 'acervo') renderAcervo();
+  if (aba === 'historico') renderHistoricoPg();
+  if (aba === 'status') renderStatus();
+  if (aba === 'pesquisa') setTimeout(() => $('inp-busca').focus(), 50);
+}
+
+/* ── acervo (GET /acervo) ── */
+async function renderAcervo() {
+  $('lista-acervo').innerHTML = '<div style="padding:22px 20px;font-size:13.5px;color:var(--tx4);">Carregando acervo…</div>';
+  const locais = await carregarAcervo();
+  $('cont-acervo').textContent = locais.length;
+  if (estado.acervoErro) {
+    $('lista-acervo').innerHTML = `<div style="padding:22px 20px;font-size:13.5px;color:var(--neg);">${esc(estado.acervoErro)}</div>`;
+    return;
+  }
+  $('lista-acervo').innerHTML = locais.length ? locais.map((p, i) => `
+    <div class="sug-item" onclick="abrirDoAcervo(${i})">
+      <div class="sug-avatar">${p.foto_url ? `<img src="${esc(p.foto_url)}" onerror="this.remove()" alt="">` : ''}<span style="position:absolute;">${p.foto_url ? '' : iniciais(p.nome)}</span></div>
+      <div style="min-width:0;"><div class="sug-nome">${esc(p.nome)}</div><div class="sug-sub">${esc(p.cargo_atual || 'cargo não informado')}</div></div>
+      ${p.tem_briefing ? '<span class="badge-pronto">dossiê pronto</span>' : ''}
+    </div>`).join('')
+    : '<div style="padding:22px 20px;font-size:13.5px;color:var(--tx4);">O acervo ainda está vazio — pesquise um executivo para começar.</div>';
+}
+function abrirDoAcervo(i) {
+  const p = estado.acervo[i];
+  estado.selecao = { nome: p.nome, headline: p.cargo_atual, pessoa_id: p.pessoa_id, local: true };
+  registrarHistorico(p.nome);
+  abrirDossie(p.pessoa_id);
+}
+
+/* ── status (GET / health check real da API) ── */
+async function renderStatus() {
+  let api = null;
+  try { api = await fetchJSON(API_BASE + '/'); } catch (e) { api = null; }
+  const linhas = [
+    ['API de coleta',
+     api ? 'operacional' : 'inacessível',
+     api ? `${API_BASE} · v${api.version || '?'} · ambiente ${api.env || '?'}`
+         : `${API_BASE} — sem resposta. Suba o servidor: uvicorn app.main:app --reload`,
+     !!api],
+    ['Acervo de dossiês',
+     api ? 'ativo' : 'indisponível',
+     api ? `${estado.acervo.length} ${estado.acervo.length === 1 ? 'executivo' : 'executivos'} · cache de 7 dias por pessoa` : 'depende da API',
+     !!api],
+    ['Busca na imprensa', api ? 'operacional' : 'indisponível', 'O Globo · Valor · Estadão · InfoMoney · Exame', !!api],
+    ['Coleta LinkedIn', api ? 'operacional' : 'indisponível', 'sujeita a bloqueios temporários anti-robô', !!api],
+    ['Análise com IA', api ? 'operacional' : 'indisponível', 'briefing, sentimento e temas', !!api]
+  ];
+  $('lista-status').innerHTML = linhas.map(([n, s, d, ok]) => `
+    <div style="display:flex;align-items:center;gap:14px;padding:14px 20px;border-bottom:1px solid var(--bd1);">
+      <span style="width:9px;height:9px;border-radius:50%;background:${ok ? 'var(--pos)' : 'var(--neg)'};box-shadow:0 0 8px ${ok ? 'rgba(70,167,88,0.6)' : 'rgba(229,72,77,0.6)'};flex-shrink:0;"></span>
+      <div style="min-width:0;flex:1;"><div style="font-size:14px;font-weight:700;">${n}</div><div style="font-size:12px;color:var(--tx5);">${d}</div></div>
+      <span style="font-size:11px;font-weight:800;letter-spacing:0.06em;text-transform:uppercase;color:${ok ? 'var(--pos)' : 'var(--neg)'};">${s}</span>
+    </div>`).join('');
+}
+const FAQ_SECOES = [
+  ['Pesquisa e seleção', [
+    ['Como pesquiso uma pessoa?', 'Digite nome, cargo ou empresa ("CEO do Nubank") e pressione Enter. Um painel mostra quem já está no acervo e os candidatos encontrados no LinkedIn — a coleta só começa quando você escolhe a pessoa.'],
+    ['Por que preciso escolher numa lista em vez de a busca ir direto?', 'É a garantia contra homônimos: "Eduardo Vale" pode ser um CEO ou um analista de sistemas. O headline do LinkedIn ao lado de cada candidato permite confirmar a identidade antes de gastar uma coleta de 20–60s na pessoa errada.'],
+    ['Digitei o nome com erro de grafia. Tem problema?', 'Sim — typos podem criar registros duplicados no banco (a busca aproximada ainda não existe). Confirme o nome no painel de sugestões antes de clicar; prefira sempre selecionar o candidato do LinkedIn, que traz o nome oficial do perfil.'],
+    ['O que aparece quando clico na barra de pesquisa?', 'Um atalho com os últimos 5 pesquisados da sessão. O histórico completo (até 20) fica na aba Histórico, na barra lateral.']
+  ]],
+  ['Coleta e cache', [
+    ['Quanto tempo demora uma coleta?', 'De 20 a 60 segundos: busca na imprensa (O Globo, Valor, Estadão, InfoMoney, Exame), coleta do LinkedIn, análise com IA (briefing, sentimento, temas) e montagem do grafo.'],
+    ['O que acontece se eu cancelar no meio?', 'Nada se perde: a coleta continua no servidor e o resultado fica no cache — a próxima busca por essa pessoa abre na hora.'],
+    ['Por que algumas buscas abrem instantaneamente?', 'Dossiês ficam válidos por 7 dias no acervo. Pesquisar alguém que já está lá pula a coleta e abre direto — a aba Acervo lista todo mundo nessa situação.'],
+    ['E se eu precisar de dados mais frescos que o cache?', 'Ligue "Forçar nova coleta" antes de pesquisar, ou use o botão "Atualizar dossiê" no topo do próprio dossiê — ambos ignoram o cache de 7 dias e recoletam tudo.'],
+    ['A coleta falhou. E agora?', 'A tela de erro mostra a causa reportada pelo servidor (ex.: bloqueio anti-robô do LinkedIn, API fora do ar, processamento acima de 3 minutos). "Tentar novamente" repete exatamente a mesma seleção — você não precisa procurar a pessoa de novo. A aba Status mostra a saúde de cada fonte.']
+  ]],
+  ['Lendo o dossiê', [
+    ['O que é o briefing executivo?', 'Três parágrafos gerados por IA a partir das fontes coletadas: quem é a pessoa (formação e trajetória), o que pensa e como a mídia a trata, e o que mudou nos últimos 12 meses — o essencial para preparar uma aproximação.'],
+    ['Como leio o indicador de sentimento das menções?', 'Cada matéria recebe uma nota de −1 (negativa) a +1 (positiva), mostrada como um marcador na régua vermelho→cinza→verde. Um traço "—" significa que a menção foi coletada mas ainda não analisada — uma recoleta resolve.'],
+    ['Alguns campos aparecem como "não informado". Por quê?', 'As fontes públicas nem sempre trazem tudo: datas de cargos, local de eventos e cargo de conexões podem vir vazios. O app mostra o que existe e sinaliza o que falta, sem inventar dados.'],
+    ['A foto do executivo sumiu.', 'As fotos vêm do LinkedIn e a URL expira após um tempo. Quando isso acontece, mostramos as iniciais no lugar; uma recoleta renova a foto.']
+  ]],
+  ['Grafo de conexões', [
+    ['O que significam as linhas diferentes?', 'Laranja sólida: laço formal (ex-colegas de empresa ou conselho em comum, inferido de períodos sobrepostos no LinkedIn). Cinza: co-menção na imprensa. Pontilhada: co-participação em evento. Tracejada esmaecida: pessoas citadas juntas apenas em listas/rankings.'],
+    ['Por que algumas conexões nascem apagadas?', 'Aparecer no mesmo ranking ("50 mais influentes") não é relação genuína. Essas arestas nascem esmaecidas e rotuladas, e o filtro "Ocultar conexões de lista/ranking" as remove da visualização.'],
+    ['Como vejo as evidências de uma relação?', 'Clique na linha: um painel conta a história ("ex-colegas na Vale: Diretor Presidente / CFO", "co-mencionados em 3 matérias") e lista até 8 evidências com link para cada matéria.'],
+    ['Para que servem os controles de profundidade e peso?', 'Profundidade define quantos saltos a partir da pessoa raiz entram no grafo (1 a 3). Peso mínimo esconde relações fracas (com poucas evidências) — útil em redes densas. "Expandir" abre o grafo em tela cheia para demos.'],
+    ['Posso navegar para outra pessoa a partir do grafo?', 'Sim — clique num nó: se a pessoa já está no acervo, o mini-card oferece "Abrir dossiê".']
+  ]],
+  ['Dados e privacidade', [
+    ['De onde vêm os dados?', 'Somente fontes públicas: o perfil público do LinkedIn e a imprensa brasileira (O Globo, Valor, Estadão, InfoMoney, Exame). Nada de bases privadas ou dados vazados.'],
+    ['O histórico fica salvo onde?', 'Só na sua sessão do navegador — fechar a aba limpa o histórico. Já o acervo de dossiês fica no servidor, compartilhado pela equipe.'],
+    ['Preciso de login?', 'Não nesta versão — a ferramenta é de uso interno da FSB. Autenticação está planejada para as próximas versões.']
+  ]]
+];
+$('grade-ajuda').innerHTML = FAQ_SECOES.map(([secao, itens]) => `
+  <div style="display:flex;flex-direction:column;gap:8px;">
+    <div class="font-display" style="font-size:16px;font-weight:700;color:var(--tx2);border-bottom:1px solid var(--bd2);padding-bottom:8px;margin-top:10px;">${secao}</div>
+    ${itens.map(([q, a]) => `
+    <details class="faq-det">
+      <summary>${q}</summary>
+      <div style="font-size:13px;color:var(--tx4);line-height:1.6;padding:2px 16px 12px;">${a}</div>
+    </details>`).join('')}
+  </div>`).join('');
+
+async function submeterBusca() {
+  const q = $('inp-busca').value.trim();
+  if (q.length < 2) return;
+  const painel = $('painel-sugestoes');
+  painel.style.display = 'block';
+  painel.innerHTML = `<div class="sugestoes"><div style="display:flex;align-items:center;gap:12px;padding:22px 20px;color:var(--tx4);font-size:13.5px;">
+    <span style="width:18px;height:18px;border-radius:50%;border:2px solid var(--ac);border-top-color:transparent;animation:spin 0.9s linear infinite;flex-shrink:0;"></span>
+    Procurando "${esc(q)}" no acervo e no LinkedIn…</div></div>`;
+  const sug = await buscarSugestoes(q);
+  const locais = (sug.locais||[]).map((p,i) => `
+    <div class="sug-item" onclick="escolherLocal(${i})">
+      <div class="sug-avatar">${p.foto_url ? `<img src="${esc(p.foto_url)}" onerror="this.remove()" alt="">` : ''}<span style="position:absolute;">${p.foto_url ? '' : iniciais(p.nome)}</span></div>
+      <div style="min-width:0;"><div class="sug-nome">${esc(p.nome)}</div><div class="sug-sub">${esc(p.cargo_atual || 'cargo não informado')}</div></div>
+      ${p.tem_briefing ? '<span class="badge-pronto">dossiê pronto</span>' : ''}
+    </div>`).join('');
+  const li = (sug.linkedin||[]).map((p,i) => `
+    <div class="sug-item" onclick="escolherLinkedin(${i})">
+      <div class="sug-avatar" style="background:var(--bd2);color:var(--tx4);">${iniciais(p.nome)}</div>
+      <div style="min-width:0;"><div class="sug-nome">${esc(p.nome)}</div><div class="sug-sub" style="color:var(--tx3);">${esc(p.headline || '')}</div></div>
+      <span class="badge-li">in/…${esc((p.linkedin_url||'').split('/in/')[1] || '').slice(0,22)}</span>
+    </div>`).join('');
+  painel.innerHTML = `<div class="sugestoes">
+    <div class="sug-header">
+      <span style="font-size:13px;color:var(--tx3);">Confirme quem você procura — <strong style="color:var(--tx1);">a coleta só começa depois da sua escolha</strong></span>
+      <span onclick="fecharSugestoes()" style="cursor:pointer;color:var(--tx5);font-size:18px;line-height:1;">×</span>
+    </div>
+    ${locais ? `<div class="sug-secao-titulo"><span style="width:7px;height:7px;border-radius:50%;background:var(--ac);"></span>No acervo — resposta instantânea</div>${locais}` : ''}
+    ${li ? `<div class="sug-secao-titulo" style="border-top:1px solid var(--bd1);margin-top:6px;padding-top:14px;"><span style="width:7px;height:7px;border-radius:50%;background:var(--tx5);"></span>LinkedIn — inicia uma coleta (20–60s)</div>${li}` : ''}
+    ${!locais && !li ? (sug.erro
+      ? `<div style="padding:20px;color:var(--neg);font-size:13.5px;">${esc(sug.erro)}</div>`
+      : '<div style="padding:20px;color:var(--tx4);font-size:13.5px;">Nenhum resultado. Refine o nome ou tente cargo + empresa.</div>') : ''}
+    <div style="padding:10px 20px 14px;font-size:11.5px;color:var(--tx5);">O headline do LinkedIn ajuda a não confundir homônimos — confira antes de clicar. Use ↑ ↓ e Enter para escolher.</div>
+  </div>`;
+  estado.sugestoesAtuais = sug;
+  estado.kbIdx = -1;
+}
+function fecharSugestoes() { $('painel-sugestoes').style.display = 'none'; estado.kbIdx = -1; }
+$('inp-busca').addEventListener('keydown', e => {
+  const aberto = $('painel-sugestoes').style.display === 'block';
+  if (aberto && (e.key === 'ArrowDown' || e.key === 'ArrowUp')) {
+    e.preventDefault();
+    const itens = $('painel-sugestoes').querySelectorAll('.sug-item');
+    if (!itens.length) return;
+    estado.kbIdx = e.key === 'ArrowDown'
+      ? (estado.kbIdx + 1) % itens.length
+      : (estado.kbIdx - 1 + itens.length) % itens.length;
+    itens.forEach((el, i) => el.classList.toggle('kb', i === estado.kbIdx));
+    return;
+  }
+  if (aberto && e.key === 'Escape') { fecharSugestoes(); return; }
+  if (e.key === 'Enter') {
+    if (aberto && estado.kbIdx >= 0) {
+      const itens = $('painel-sugestoes').querySelectorAll('.sug-item');
+      if (itens[estado.kbIdx]) { itens[estado.kbIdx].click(); return; }
+    }
+    esconderRecentes(); submeterBusca();
+  }
+});
+
+/* ── dropdown últimos 5 pesquisados (foco no input) ── */
+function mostrarRecentes() {
+  const dd = $('dd-recentes');
+  const rec = estado.historico.slice(0, 5);
+  if (!rec.length || $('painel-sugestoes').style.display === 'block') { dd.style.display = 'none'; return; }
+  dd.innerHTML = `<div style="padding:10px 18px 4px;font-size:10.5px;font-weight:800;letter-spacing:0.12em;text-transform:uppercase;color:var(--tx5);">Últimos pesquisados</div>` +
+    rec.map(h => `
+    <div class="sug-item" onmousedown="event.preventDefault();rebuscar('${esc(h.nome)}')">
+      <span style="width:26px;height:26px;border-radius:50%;background:var(--bd2);color:var(--ac);display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:800;flex-shrink:0;">${iniciais(h.nome)}</span>
+      <span style="font-size:13.5px;color:var(--tx2);font-weight:600;">${esc(h.nome)}</span>
+      <span style="margin-left:auto;font-size:11.5px;color:var(--tx5);">${h.hora}</span>
+    </div>`).join('');
+  dd.style.display = 'block';
+}
+function esconderRecentes() { $('dd-recentes').style.display = 'none'; }
+$('inp-busca').addEventListener('focus', mostrarRecentes);
+$('inp-busca').addEventListener('blur', () => setTimeout(esconderRecentes, 120));
+$('inp-busca').addEventListener('input', esconderRecentes);
+
+function registrarHistorico(nome) {
+  const hora = new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+  estado.historico = [{ nome, hora }, ...estado.historico.filter(h => h.nome.toLowerCase() !== nome.toLowerCase())].slice(0, 20);
+  renderHistorico();
+}
+function renderHistorico() {
+  $('cont-hist').textContent = estado.historico.length;
+  if ($('painel-historico').classList.contains('on')) renderHistoricoPg();
+}
+function renderHistoricoPg() {
+  const h = estado.historico;
+  $('lista-historico-pg').innerHTML = h.length ? h.map(it => {
+    const local = (estado.acervo || []).find(l => l.nome.toLowerCase() === it.nome.toLowerCase());
+    return `<div class="sug-item" onclick="rebuscar('${esc(it.nome)}')">
+      <div class="sug-avatar" style="width:36px;height:36px;font-size:12px;">${local && local.foto_url ? `<img src="${esc(local.foto_url)}" onerror="this.remove()" alt="">` : iniciais(it.nome)}</div>
+      <div style="min-width:0;"><div class="sug-nome" style="font-size:14px;">${esc(it.nome)}</div><div class="sug-sub">pesquisado às ${it.hora}</div></div>
+      ${local ? '<span class="badge-pronto">dossiê pronto</span>' : '<span class="badge-li">pesquisar de novo →</span>'}
+    </div>`;
+  }).join('') : '<div style="padding:22px 20px;font-size:13.5px;color:var(--tx4);">Nenhuma pesquisa nesta sessão ainda.</div>';
+}
+function limparHistorico() { estado.historico = []; renderHistorico(); renderHistoricoPg(); }
+function rebuscar(nome) { trocarAba('pesquisa'); $('inp-busca').value = nome; esconderRecentes(); submeterBusca(); }
+
+function escolherLocal(i) {
+  const p = estado.sugestoesAtuais.locais[i];
+  estado.selecao = { nome: p.nome, headline: p.cargo_atual, pessoa_id: p.pessoa_id, local: true };
+  registrarHistorico(p.nome);
+  if (estado.forcar) { executarColeta(); return; }
+  // cache hit: pular direto ao dossiê
+  fecharSugestoes();
+  abrirDossie(p.pessoa_id);
+}
+function escolherLinkedin(i) {
+  const p = estado.sugestoesAtuais.linkedin[i];
+  estado.selecao = { nome: p.nome, headline: p.headline, linkedin_url: p.linkedin_url, local: false };
+  registrarHistorico(p.nome);
+  executarColeta();
+}
+
+/* ═══════════════ CARREGANDO ═══════════════ */
+const ETAPAS = [
+  ['Buscando na imprensa…', 'O Globo · Valor · Estadão · InfoMoney', 2600],
+  ['Coletando LinkedIn…', 'perfil público e trajetória', 2400],
+  ['Analisando com IA…', 'briefing, sentimento e temas', 3000],
+  ['Montando grafo…', 'laços formais e co-menções', 1800]
+];
+function renderEtapas(atual, done) {
+  $('lista-etapas').innerHTML = ETAPAS.map(([n,d], i) => {
+    const cls = (done || i < atual) ? 'etapa-feita' : (i === atual ? 'etapa-ativa' : 'etapa-pend');
+    return `<div class="etapa-row ${cls}"><div class="etapa-icone"></div><div class="etapa-nome">${n}</div><div class="etapa-detalhe">${(i <= atual || done) ? d : ''}</div></div>`;
+  }).join('');
+  $('etapa-nome-atual').textContent = done ? 'Concluído' : (ETAPAS[atual] || [''])[0];
+}
+// Momentos (ms) em que as etapas visuais avançam. A coleta real leva 20–60s;
+// as etapas são indicativas e a última fica ativa até o backend responder.
+const ETAPA_AVANCA_EM = [5000, 12000, 24000];
+
+async function executarColeta() {
+  fecharSugestoes();
+  limparTimers();
+  estado.cancelado = false;
+  const sel = estado.selecao;
+  const forcar = estado.forcar || estado.forcarProxima;
+  estado.forcarProxima = false;
+  $('carr-nome').textContent = sel.nome;
+  $('carr-headline').textContent = sel.headline || '';
+  mostrarTela('carregando');
+  renderEtapas(0, false);
+
+  const inicio = Date.now();
+  // Progresso assintótico: sobe rápido e desacelera, travando em 99% —
+  // o salto para 100% só acontece quando o job real termina.
+  estado.intervalo = setInterval(() => {
+    const pct = Math.min(99, 100 * (1 - Math.exp(-(Date.now() - inicio) / 30000)));
+    $('barra-prog').style.width = pct + '%';
+    $('prog-pct').textContent = Math.round(pct) + '%';
+  }, 100);
+  ETAPA_AVANCA_EM.forEach((ms, i) => {
+    estado.timers.push(setTimeout(() => { if (!estado.cancelado) renderEtapas(i + 1, false); }, ms));
+  });
+
+  // A chamada real começa AGORA, em paralelo com a animação das etapas.
+  const res = await iniciarColeta(sel.nome, sel.linkedin_url, forcar);
+  if (estado.cancelado) return;
+  limparTimers();
+  if (!res.ok) { mostrarErro(res.erro); return; }
+  renderEtapas(3, true);
+  $('barra-prog').style.width = '100%';
+  $('prog-pct').textContent = '100%';
+  carregarAcervo(); // dossiê novo entra no acervo
+  setTimeout(() => { if (!estado.cancelado) abrirDossie(res.pessoa_id); }, 450);
+}
+function cancelarColeta() { estado.cancelado = true; limparTimers(); mostrarTela('busca'); }
+
+/* ═══════════════ ERRO ═══════════════ */
+function mostrarErro(causa, titulo, sub) {
+  limparTimers();
+  $('erro-titulo').textContent = titulo || 'A coleta falhou';
+  $('erro-sub').textContent = sub || `Não foi possível montar o dossiê de ${estado.selecao ? estado.selecao.nome : 'a pessoa selecionada'}. Isso pode acontecer quando o LinkedIn bloqueia a coleta, a API está fora do ar ou o processamento excede 3 minutos.`;
+  $('erro-causa').textContent = causa || 'Erro desconhecido.';
+  mostrarTela('erro');
+}
+function tentarNovamente() { if (estado.selecao) executarColeta(); else voltarBusca(); }
+function voltarBusca() {
+  limparTimers();
+  if (estado.cy) { estado.cy.destroy(); estado.cy = null; }
+  mostrarTela('busca');
+}
+
+/* ═══════════════ DOSSIÊ ═══════════════ */
+async function abrirDossie(pessoaId) {
+  const p = await carregarPerfil(pessoaId);
+  estado.perfil = p;
+  const pes = p.pessoa;
+  $('dos-atualizado').textContent = pes.atualizado_em ? 'Atualizado em ' + fmtData(pes.atualizado_em) : '';
+  // idade do dossiê vs cache de 7 dias
+  const chip = $('chip-idade');
+  if (pes.atualizado_em) {
+    const dias = Math.floor((Date.now() - new Date(pes.atualizado_em).getTime()) / 86400000);
+    if (dias >= 7) { chip.style.display = 'inline-block'; chip.style.cssText += 'background:rgba(229,72,77,0.12);color:var(--neg);border:1px solid rgba(229,72,77,0.35);'; chip.textContent = `cache expirado há ${dias - 7} ${dias - 7 === 1 ? 'dia' : 'dias'} — recolete`; }
+    else if (dias >= 5) { chip.style.display = 'inline-block'; chip.style.cssText += 'background:rgba(245,146,30,0.12);color:var(--ac);border:1px solid rgba(245,146,30,0.35);'; chip.textContent = `expira em ${7 - dias} ${7 - dias === 1 ? 'dia' : 'dias'}`; }
+    else { chip.style.display = 'none'; }
+  } else { chip.style.display = 'none'; }
+  $('dos-nome').textContent = pes.nome || '';
+  $('dos-cargo').textContent = pes.cargo_atual || 'cargo não informado';
+  $('dos-linkedin').href = pes.linkedin_url || '#';
+  // foto com fallback de iniciais
+  const fw = $('dos-foto');
+  fw.innerHTML = `<div style="width:100px;height:100px;border-radius:50%;background:linear-gradient(135deg,rgba(255,178,92,0.25),rgba(224,109,16,0.25));border:2px solid var(--bd4);display:flex;align-items:center;justify-content:center;font-size:32px;font-weight:800;color:#fff;overflow:hidden;position:relative;">
+    <span>${iniciais(pes.nome)}</span>${pes.foto_url ? `<img src="${esc(pes.foto_url)}" onerror="this.remove()" style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover;" alt="">` : ''}</div>`;
+  $('dos-briefing').innerHTML = p.briefing
+    ? p.briefing.split('\n\n').map(t => `<p style="margin:0;font-size:18.5px;line-height:1.68;color:var(--tx2);text-wrap:pretty;">${esc(t)}</p>`).join('')
+    : `<div class="vazio">O briefing desta pessoa ainda não foi gerado — normalmente isso significa que a coleta é recente e a análise com IA não rodou. <a href="#" onclick="atualizarDossie();return false;">Forçar nova coleta</a> resolve.</div>`;
+  $('btn-copiar').style.display = p.briefing ? 'inline-block' : 'none';
+  // menções
+  $('menc-total').textContent = p.mencoes.length ? `${p.mencoes.length} matérias` : '';
+  $('lista-mencoes').innerHTML = p.mencoes.length ? p.mencoes.map(m => {
+    const s = m.sentimento;
+    const temS = s !== null && s !== undefined;
+    const pos = temS ? ((s + 1) / 2) * 100 : 50;
+    const cor = !temS ? 'var(--tx5)' : s > 0.05 ? 'var(--pos)' : s < -0.05 ? 'var(--neg)' : 'var(--neu)';
+    const val = temS ? (s > 0 ? '+' : '') + s.toFixed(1) : '—';
+    return `<div class="mencao-card">
+      <div style="display:flex;align-items:flex-start;gap:14px;">
+        <a href="${esc(m.url)}" target="_blank" rel="noopener" style="font-size:15px;font-weight:600;color:var(--tx1);line-height:1.4;flex:1;">${esc(m.titulo)}</a>
+        <div style="display:flex;align-items:center;gap:7px;flex-shrink:0;margin-top:2px;" title="${temS ? 'Sentimento: ' + s.toFixed(1) + ' (de −1 a +1)' : 'Sentimento ainda não analisado'}">
+          <div style="width:56px;height:4px;border-radius:2px;background:linear-gradient(90deg,var(--neg),var(--neu),var(--pos));position:relative;">
+            <div style="position:absolute;top:50%;left:${pos}%;transform:translate(-50%,-50%);width:11px;height:11px;border-radius:50%;background:${cor};border:2px solid var(--sup2);"></div>
+          </div>
+          <span style="font-size:11.5px;font-variant-numeric:tabular-nums;font-weight:700;color:${cor};">${val}</span>
+        </div>
+      </div>
+      <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+        <span class="badge-fonte">${FONTES[m.fonte] || m.fonte}</span>
+        <span style="font-size:12px;color:var(--tx5);">${fmtData(m.data_publicacao)}</span>
+        <span style="width:1px;height:12px;background:var(--bd3);"></span>
+        ${(m.temas||[]).map(t => `<span class="chip-tema">${esc(t)}</span>`).join('')}
+      </div></div>`;
+  }).join('') : '<div class="vazio">Nenhuma menção na imprensa encontrada — pessoa com baixa exposição de mídia ou coleta muito recente.</div>';
+  // eventos
+  $('lista-eventos').innerHTML = p.eventos.length ? p.eventos.map(ev => `
+    <div style="display:flex;align-items:baseline;gap:14px;padding:13px 2px;border-bottom:1px solid var(--bd1);">
+      <span style="width:6px;height:6px;border-radius:50%;background:var(--ac);flex-shrink:0;position:relative;top:-2px;"></span>
+      <span style="font-size:14.5px;color:var(--tx2);line-height:1.45;flex:1;">${esc(ev.nome)}</span>
+      <a href="${esc(ev.fonte_url)}" target="_blank" rel="noopener" style="font-size:12px;flex-shrink:0;">fonte ↗</a>
+    </div>`).join('') : '<div class="vazio">Nenhum evento identificado nas fontes coletadas.</div>';
+  // trajetória
+  $('lista-cargos').innerHTML = p.cargos.length ? p.cargos.map(c => `
+    <div class="traj-item">
+      <div class="traj-col">
+        <div style="${c.eh_atual ? 'width:11px;height:11px;background:var(--ac);margin-top:4px;' : 'width:9px;height:9px;background:var(--bd4);border:1.5px solid #6E5F49;margin-top:5px;'}border-radius:50%;flex-shrink:0;"></div>
+        <div class="traj-linha"></div>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:4px;padding-bottom:26px;">
+        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+          <span style="font-size:14.5px;font-weight:700;line-height:1.35;">${esc(c.funcao)}</span>
+          ${c.eh_atual ? '<span class="badge-atual">Atual</span>' : ''}
+        </div>
+        <div style="font-size:13.5px;color:var(--tx3);">${esc(c.empresa)}</div>
+        <div style="font-size:12px;color:var(--tx5);">${fmtPeriodo(c)}</div>
+      </div>
+    </div>`).join('') : '<div class="vazio">Trajetória não disponível — o perfil do LinkedIn pode estar privado ou a coleta falhou parcialmente.</div>';
+
+  mostrarTela('dossie');
+  // stagger de entrada
+  ['sec-cab','sec-brief','sec-grafo','sec-menc','sec-even','sec-traj'].forEach((id, i) => {
+    const el = $(id); el.classList.remove('entra'); void el.offsetWidth;
+    el.style.animationDelay = (i * 0.09) + 's'; el.classList.add('entra');
+  });
+  atualizarGrafo(true);
+}
+function atualizarDossie() {
+  estado.selecao = estado.selecao || { nome: estado.perfil.pessoa.nome, headline: estado.perfil.pessoa.cargo_atual };
+  estado.selecao.nome = estado.perfil ? estado.perfil.pessoa.nome : estado.selecao.nome;
+  estado.selecao.linkedin_url = estado.perfil ? estado.perfil.pessoa.linkedin_url : estado.selecao.linkedin_url;
+  estado.forcarProxima = true;  // "Atualizar dossiê" sempre ignora o cache
+  executarColeta();
+}
+async function copiarBriefing() {
+  if (!estado.perfil || !estado.perfil.briefing) return;
+  const p = estado.perfil.pessoa;
+  const texto = `${p.nome} — ${p.cargo_atual || ''}\n\n${estado.perfil.briefing}\n\nFonte: Deeper · FSB Holding · atualizado em ${fmtData(p.atualizado_em)}`;
+  try { await navigator.clipboard.writeText(texto); } catch (e) {
+    const ta = document.createElement('textarea'); ta.value = texto; document.body.appendChild(ta); ta.select(); document.execCommand('copy'); ta.remove();
+  }
+  const b = $('btn-copiar'); const orig = b.textContent;
+  b.textContent = 'Copiado ✓'; b.style.color = 'var(--pos)'; b.style.borderColor = 'var(--pos)';
+  setTimeout(() => { b.textContent = orig; b.style.color = ''; b.style.borderColor = ''; }, 1600);
+}
+
+/* ═══════════════ GRAFO ═══════════════ */
+const COR_ARESTA = { colega_empresa: '#F5921E', co_board: '#F5921E', co_mencionado: '#8A7A64', co_evento: '#B08D5E' };
+const NOME_TIPO = { colega_empresa: 'Ex-colegas de empresa', co_board: 'Conselho em comum', co_mencionado: 'Co-mencionados na imprensa', co_evento: 'Co-participação em evento' };
+function ehSoLista(e) { return (e.evidencias||[]).length > 0 && e.evidencias.every(ev => ev.contexto === 'lista'); }
+
+async function atualizarGrafo(animar) {
+  const g = await carregarGrafo(estado.perfil.pessoa.id, estado.prof, estado.pesoMin);
+  estado.grafoDados = g;
+  const edgesVis = g.edges.filter(e => !(estado.ocultarLista && ehSoLista(e)));
+  const grau = {};
+  edgesVis.forEach(e => { grau[e.source] = (grau[e.source]||0)+1; grau[e.target] = (grau[e.target]||0)+1; });
+  const idsVis = new Set();
+  edgesVis.forEach(e => { idsVis.add(e.source); idsVis.add(e.target); });
+  const nodesVis = g.nodes.filter(n => n.raiz || idsVis.has(n.id));
+  // contadores
+  const formais = edgesVis.filter(e => e.tipo === 'colega_empresa' || e.tipo === 'co_board').length;
+  const deListas = g.edges.filter(ehSoLista).length;
+  $('grafo-contadores').textContent = `${nodesVis.length - 1} conexões · ${formais} ${formais === 1 ? 'laço formal' : 'laços formais'} · ${deListas} de listas/rankings${estado.ocultarLista && deListas ? ' (ocultas)' : ''}`;
+
+  const els = [
+    ...nodesVis.map(n => ({ data: { id: 'n' + n.id, pid: n.id, label: n.label, cargo: n.cargo_atual, foto: n.foto_url || null, raiz: n.raiz ? 1 : 0, grau: grau[n.id] || 0 } })),
+    ...edgesVis.map((e, i) => ({ data: { id: 'e' + i, source: 'n' + e.source, target: 'n' + e.target, tipo: e.tipo, peso: e.peso, soLista: ehSoLista(e) ? 1 : 0, idx: i } }))
+  ];
+  if (estado.cy) { estado.cy.destroy(); estado.cy = null; }
+  fecharCards();
+  const cy = estado.cy = cytoscape({
+    container: $('cy'),
+    elements: els,
+    style: [
+      { selector: 'node', style: {
+        'background-color': '#463822', 'border-width': 1.5, 'border-color': '#6E5F49',
+        'width': ele => 34 + Math.min(26, ele.data('grau') * 6), 'height': ele => 34 + Math.min(26, ele.data('grau') * 6),
+        'label': 'data(label)', 'color': '#CFC3B0', 'font-size': 11.5, 'font-family': 'Nunito, sans-serif', 'font-weight': 600,
+        'text-valign': 'bottom', 'text-margin-y': 8, 'transition-property': 'opacity', 'transition-duration': '0.2s' } },
+      { selector: 'node[foto]', style: { 'background-image': 'data(foto)', 'background-fit': 'cover' } },
+      { selector: 'node[raiz = 1]', style: {
+        'width': 72, 'height': 72, 'border-width': 3.5, 'border-color': '#F5921E',
+        'color': '#F5EFE6', 'font-weight': 800, 'font-size': 13 } },
+      { selector: 'edge', style: {
+        'width': ele => 1.5 + Math.min(6, ele.data('peso') * 1.4),
+        'line-color': ele => COR_ARESTA[ele.data('tipo')] || '#8A7A64',
+        'line-style': ele => ele.data('soLista') ? 'dashed' : (ele.data('tipo') === 'co_evento' ? 'dotted' : 'solid'),
+        'opacity': ele => ele.data('soLista') ? 0.35 : (ele.data('tipo') === 'co_mencionado' ? 0.75 : 0.95),
+        'curve-style': 'bezier', 'control-point-step-size': 42,
+        'transition-property': 'opacity, width', 'transition-duration': '0.2s' } },
+      { selector: 'edge[soLista = 1]', style: { 'line-color': '#5E5240' } },
+      { selector: '.dim', style: { 'opacity': 0.12 } },
+      { selector: 'edge.hl', style: { 'opacity': 1, 'width': ele => 3 + Math.min(6, ele.data('peso') * 1.4) } },
+      { selector: 'node:selected', style: { 'border-color': '#FFB25C', 'border-width': 4 } }
+    ],
+    layout: { name: 'cose', animate: animar ? 'end' : false, animationDuration: 700, padding: 70, nodeRepulsion: 12000 },
+    wheelSensitivity: 0.2
+  });
+  // hover: destaca vizinhança
+  cy.on('mouseover', 'node', ev => {
+    const n = ev.target, viz = n.closedNeighborhood();
+    cy.elements().not(viz).addClass('dim');
+    viz.edges().addClass('hl');
+  });
+  cy.on('mouseout', 'node', () => { cy.elements().removeClass('dim hl'); });
+  cy.on('tap', 'node', ev => { mostrarCardNo(ev.target.data()); $('card-aresta').style.display = 'none'; });
+  cy.on('tap', 'edge', ev => { mostrarCardAresta(edgesVis[ev.target.data('idx')]); $('card-no').style.display = 'none'; });
+  cy.on('tap', ev => { if (ev.target === cy) fecharCards(); });
+}
+function fecharCards() { $('card-no').style.display = 'none'; $('card-aresta').style.display = 'none'; }
+function mostrarCardNo(d) {
+  // Todo nó do grafo é uma pessoa no banco; oferecemos "abrir dossiê" para
+  // quem já tem briefing pronto (os demais abririam um dossiê vazio).
+  const noAcervo = (estado.acervo || []).some(l => l.pessoa_id === d.pid && l.tem_briefing);
+  $('card-no').style.display = 'block';
+  $('card-no').innerHTML = `
+    <div style="font-size:15px;font-weight:800;">${esc(d.label)}</div>
+    <div style="font-size:12.5px;color:var(--tx4);margin-top:2px;">${esc(d.cargo || 'cargo não informado')}</div>
+    ${noAcervo && !d.raiz ? `<button class="btn-solido" style="margin-top:10px;padding:6px 14px;font-size:12.5px;" onclick="abrirDossie(${d.pid})">Abrir dossiê →</button>` : ''}
+    ${d.raiz ? '<div style="font-size:11px;color:var(--ac);font-weight:800;letter-spacing:0.08em;text-transform:uppercase;margin-top:8px;">● Raiz do grafo</div>' : ''}`;
+}
+function mostrarCardAresta(e) {
+  const a = estado.grafoDados.nodes.find(n => n.id === e.source), b = estado.grafoDados.nodes.find(n => n.id === e.target);
+  const formal = e.tipo === 'colega_empresa' || e.tipo === 'co_board';
+  let historia = '';
+  if (formal && e.evidencias && e.evidencias[0]) {
+    const ev = e.evidencias[0];
+    historia = `${e.tipo === 'co_board' ? 'Conselho em comum' : 'Ex-colegas'} na <strong>${esc(ev.empresa)}</strong>: ${esc(ev.funcao_a)} / ${esc(ev.funcao_b)}`;
+  } else if (e.tipo === 'co_mencionado') {
+    historia = `Co-mencionados em <strong>${e.evidencias.length}</strong> ${e.evidencias.length === 1 ? 'matéria' : 'matérias'}`;
+  } else { historia = NOME_TIPO[e.tipo] || e.tipo; }
+  const evid = (e.evidencias||[]).map(ev => ev.mencao_url ? `
+    <div class="evid-item">
+      <div style="display:flex;align-items:center;gap:8px;">
+        <a href="${esc(ev.mencao_url)}" target="_blank" rel="noopener" style="font-size:13px;font-weight:600;line-height:1.4;flex:1;">${esc(ev.titulo)}</a>
+        <span class="${ev.contexto === 'lista' ? 'tag-lista' : 'tag-direta'}">${ev.contexto === 'lista' ? 'lista/ranking' : 'direta'}</span>
+      </div>
+      ${ev.contexto === 'lista' ? '<div style="font-size:11.5px;color:var(--tx5);">citados juntos num ranking — não indica relação genuína</div>' : ''}
+    </div>` : `
+    <div class="evid-item">
+      <div style="font-size:13px;color:var(--tx2);"><strong>${esc(ev.empresa)}</strong> — ${esc(ev.funcao_a)} / ${esc(ev.funcao_b)}</div>
+      <div style="font-size:11.5px;color:var(--tx5);">períodos sobrepostos no LinkedIn</div>
+    </div>`).join('');
+  $('card-aresta').style.display = 'block';
+  $('card-aresta').innerHTML = `
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px;">
+      <div>
+        <div style="font-size:10.5px;font-weight:800;letter-spacing:0.1em;text-transform:uppercase;color:${formal ? 'var(--ac)' : 'var(--tx5)'};">${NOME_TIPO[e.tipo] || e.tipo}</div>
+        <div style="font-size:14px;font-weight:700;margin-top:4px;">${esc(a ? a.label : '')} ↔ ${esc(b ? b.label : '')}</div>
+        <div style="font-size:12.5px;color:var(--tx3);margin-top:3px;">${historia}</div>
+      </div>
+      <span onclick="fecharCards()" style="cursor:pointer;color:var(--tx5);font-size:18px;line-height:1;">×</span>
+    </div>
+    <div style="font-size:10.5px;font-weight:800;letter-spacing:0.1em;text-transform:uppercase;color:var(--tx5);margin:14px 0 4px;">Evidências (${(e.evidencias||[]).length})</div>
+    ${evid}`;
+}
+function alternarFiltroLista() { estado.ocultarLista = !estado.ocultarLista; $('tgl-lista').classList.toggle('on', estado.ocultarLista); atualizarGrafo(false); }
+function recentrarGrafo() { if (estado.cy) estado.cy.animate({ fit: { padding: 70 }, duration: 400 }); }
+function alternarFullscreen() {
+  const sh = $('grafo-shell');
+  // a animação de entrada deixa um transform/opacity no ancestral, o que quebra position:fixed — neutraliza antes de expandir
+  const sec = $('sec-grafo');
+  sec.style.animation = 'none';
+  sec.style.opacity = '1';
+  sh.classList.toggle('fullscreen');
+  document.body.style.overflow = sh.classList.contains('fullscreen') ? 'hidden' : '';
+  $('btn-fs').textContent = sh.classList.contains('fullscreen') ? '✕ Fechar' : '⤢ Expandir';
+  setTimeout(() => { if (estado.cy) { estado.cy.resize(); estado.cy.fit(undefined, 70); } }, 60);
+}
+document.addEventListener('keydown', e => { if (e.key === 'Escape' && $('grafo-shell').classList.contains('fullscreen')) alternarFullscreen(); });
+['ctl-prof','ctl-peso'].forEach(id => {
+  $(id).addEventListener('click', e => {
+    const b = e.target.closest('button'); if (!b) return;
+    $(id).querySelectorAll('button').forEach(x => x.classList.remove('on'));
+    b.classList.add('on');
+    if (id === 'ctl-prof') estado.prof = +b.dataset.v; else estado.pesoMin = +b.dataset.v;
+    atualizarGrafo(false);
+  });
+});
+
+/* ═══════════════ BOOT ═══════════════ */
+carregarAcervo().then(() => {
+  $('cont-acervo').textContent = estado.acervo.length;
+  renderHistorico();
+});
+</script>
+</body>
+</html>

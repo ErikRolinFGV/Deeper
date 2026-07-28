@@ -130,6 +130,20 @@ Rede de conexões, formato pronto para Cytoscape.js. Ver `exemplo_grafo.json`.
   "50 mais ricos" — NÃO é conexão genuína; a UI deve deixar isso visível).
 - `404` se a pessoa não existe.
 
+## GET /acervo?limite=100
+
+Lista os executivos já pesquisados (aba Acervo), mais recentes primeiro.
+
+```json
+{
+  "total": 2,
+  "pessoas": [
+    { "pessoa_id": 1, "nome": "Eduardo Bartolomeo", "cargo_atual": "Membro do conselho — Boston Metal",
+      "foto_url": "https://...", "tem_briefing": true, "atualizado_em": "2026-07-12T01:13:07-03:00" }
+  ]
+}
+```
+
 ## GET /
 
 Health check: `{ "status": "ok", "env": "development", "version": "0.1.0" }`
