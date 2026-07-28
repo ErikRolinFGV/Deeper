@@ -79,6 +79,11 @@
   .busca-col > *:nth-child(2) { animation-delay: 0.16s; }
   .busca-col > *:nth-child(3) { animation-delay: 0.27s; }
   .busca-input-row input { animation: none; }
+  /* O fill-mode "both" da animação de entrada cria um stacking context em cada
+     filho de .busca-col — sem elevar o bloco da busca, o bloco seguinte (toggle,
+     dicas) pinta POR CIMA do dropdown de recentes, que fica preso no contexto
+     do próprio bloco. Elevar o wrapper resolve para recentes e sugestões. */
+  .busca-col > *:nth-child(2) { position: relative; z-index: 30; }
   .busca-input-row { display: flex; gap: 10px; width: 100%; }
   .busca-input-row input { flex: 1; background: var(--sup3); border: 1px solid var(--bd3); border-radius: 10px; padding: 17px 22px; font-size: 17px; color: var(--tx1); font-family: 'Nunito', sans-serif; outline: none; transition: border-color 0.2s, box-shadow 0.2s; }
   .busca-input-row input:focus { border-color: var(--ac); box-shadow: 0 0 0 3px rgba(245,146,30,0.16); }
@@ -1102,15 +1107,34 @@ async function atualizarGrafo(animar) {
 }
 function fecharCards() { $('card-no').style.display = 'none'; $('card-aresta').style.display = 'none'; }
 function mostrarCardNo(d) {
-  // Todo nó do grafo é uma pessoa no banco; oferecemos "abrir dossiê" para
-  // quem já tem briefing pronto (os demais abririam um dossiê vazio).
-  const noAcervo = (estado.acervo || []).some(l => l.pessoa_id === d.pid && l.tem_briefing);
+  // Todo nó do grafo é uma pessoa no banco, mas só quem já foi pesquisado tem
+  // dossiê. Quem não tem ganha o botão "Pesquisar", que leva à busca com o
+  // nome preenchido — a identidade continua sendo confirmada pelo usuário
+  // (o nó veio de uma co-menção e pode ser homônimo de outra pessoa).
+  const temDossie = (estado.acervo || []).some(l => l.pessoa_id === d.pid && l.tem_briefing);
+  const acao = d.raiz ? ''
+    : temDossie
+      ? `<button class="btn-solido" style="margin-top:10px;padding:6px 14px;font-size:12.5px;" onclick="abrirDossie(${d.pid})">Abrir dossiê →</button>`
+      : `<button class="btn-solido" style="margin-top:10px;padding:6px 14px;font-size:12.5px;" onclick="pesquisarDoGrafo('${esc(d.label)}')">Pesquisar →</button>
+         <div style="font-size:11px;color:var(--tx5);margin-top:6px;">ainda sem dossiê · confirme a pessoa nas sugestões</div>`;
   $('card-no').style.display = 'block';
   $('card-no').innerHTML = `
     <div style="font-size:15px;font-weight:800;">${esc(d.label)}</div>
     <div style="font-size:12.5px;color:var(--tx4);margin-top:2px;">${esc(d.cargo || 'cargo não informado')}</div>
-    ${noAcervo && !d.raiz ? `<button class="btn-solido" style="margin-top:10px;padding:6px 14px;font-size:12.5px;" onclick="abrirDossie(${d.pid})">Abrir dossiê →</button>` : ''}
+    ${acao}
     ${d.raiz ? '<div style="font-size:11px;color:var(--ac);font-weight:800;letter-spacing:0.08em;text-transform:uppercase;margin-top:8px;">● Raiz do grafo</div>' : ''}`;
+}
+
+/* Salta de um nó do grafo para uma nova pesquisa: sai do dossiê atual e já
+   abre o painel de sugestões com o nome preenchido. */
+function pesquisarDoGrafo(nome) {
+  if ($('grafo-shell').classList.contains('fullscreen')) alternarFullscreen();
+  fecharCards();
+  voltarBusca();              // limpa timers, destrói o cy e volta à tela de busca
+  trocarAba('pesquisa');
+  $('inp-busca').value = nome;
+  esconderRecentes();
+  submeterBusca();
 }
 function mostrarCardAresta(e) {
   const a = estado.grafoDados.nodes.find(n => n.id === e.source), b = estado.grafoDados.nodes.find(n => n.id === e.target);
