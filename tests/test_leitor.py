@@ -10,7 +10,7 @@ os.environ.setdefault("SERPAPI_KEY", "test")
 os.environ.setdefault("JWT_SECRET", "test")
 
 from app.services.collectors import leitor_artigo
-from app.services.collectors.leitor_artigo import baixar_texto
+from app.services.collectors.leitor_artigo import baixar_artigo, baixar_texto, eh_autor
 
 PARAGRAFO = (
     "O executivo afirmou que a companhia seguirá investindo em descarbonização "
@@ -61,6 +61,45 @@ def test_falha_de_rede_retorna_none(monkeypatch):
 
     monkeypatch.setattr(leitor_artigo.httpx, "get", explode)
     assert baixar_texto("https://x.com/fora") is None
+
+
+# ---------- autoria (caso Marcelo Diego: repórter virou "conexão") ----------
+
+
+def test_extrai_autor_de_meta_tag(monkeypatch):
+    html = f"""<html><head><meta name="author" content="Marcelo Diego"></head><body>
+    <article><p>{PARAGRAFO}</p><p>{PARAGRAFO} Segundo trecho da matéria.</p></article>
+    </body></html>"""
+    monkeypatch.setattr(leitor_artigo.httpx, "get", lambda *a, **kw: _Resp(html))
+    art = baixar_artigo("https://folha/materia")
+    assert art["autor"] == "Marcelo Diego"
+
+
+def test_extrai_autor_de_assinatura_no_texto(monkeypatch):
+    html = f"""<html><body><article>
+    <p>Por Marcelo Diego, enviado especial a Washington, para a Folha de S.Paulo</p>
+    <p>{PARAGRAFO}</p><p>{PARAGRAFO} Continuação do texto da reportagem.</p>
+    </article></body></html>"""
+    monkeypatch.setattr(leitor_artigo.httpx, "get", lambda *a, **kw: _Resp(html))
+    art = baixar_artigo("https://folha/materia")
+    assert art["autor"] and "Marcelo Diego" in art["autor"]
+
+
+def test_materia_sem_autor(monkeypatch):
+    monkeypatch.setattr(leitor_artigo.httpx, "get", lambda *a, **kw: _Resp(HTML_MATERIA))
+    assert baixar_artigo("https://valor.globo.com/materia")["autor"] is None
+
+
+def test_eh_autor_casa_nome_com_variacoes():
+    assert eh_autor("Marcelo Diego", "Marcelo Diego") is True
+    assert eh_autor("Marcelo Diego", "Marcelo Diego, da Folha de S.Paulo") is True
+    assert eh_autor("Marcelo Diego", "MARCELO DIEGO") is True
+    assert eh_autor("Marcelo Diego", "Diego Marcelo") is True  # ordem invertida
+    # Outra pessoa não pode ser confundida com o alvo
+    assert eh_autor("Marcelo Diego", "Marcelo Rubens Paiva") is False
+    assert eh_autor("Marcelo Diego", "Redação") is False
+    assert eh_autor("Marcelo Diego", None) is False
+    assert eh_autor("Marcelo", "Marcelo Diego") is False  # nome único não basta
 
 
 def test_respeita_teto_de_caracteres(monkeypatch):

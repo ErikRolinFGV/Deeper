@@ -27,7 +27,7 @@ from app.models.job import JobColeta, StatusJob
 from app.models.mencao import Mencao
 from app.models.pessoa import Pessoa
 from app.models.relacao import Relacao
-from app.services.llm.extrator import EntidadesExtraidas
+from app.services.llm.extrator import EntidadesExtraidas, PessoaCitada
 from app.workers import busca_worker
 
 engine = create_engine(
@@ -77,7 +77,7 @@ def preparar(monkeypatch):
     monkeypatch.setattr(busca_worker, "sintetizar", lambda dados: BRIEFING_FALSO)
     monkeypatch.setattr(busca_worker, "coletar_perfil_linkedin", lambda url: None)
     monkeypatch.setattr(busca_worker, "descobrir_linkedin_url", lambda nome, ctx=None: None)
-    monkeypatch.setattr(busca_worker, "baixar_texto", lambda url: None)
+    monkeypatch.setattr(busca_worker, "baixar_artigo", lambda url: None)
     yield
     Base.metadata.drop_all(engine)
 
@@ -342,6 +342,96 @@ def test_pipeline_falha_marca_job_failed(db, monkeypatch):
     assert "SerpAPI caiu" in job.erro
 
 
+def test_descritor_da_pessoa_citada_vira_contexto_de_origem(db, monkeypatch):
+    """O nó 'João Pedro' guarda de qual João Pedro a matéria falava."""
+    com_descritor = EXTRACAO_FALSA.model_copy(
+        update={"pessoas_mencionadas": [
+            PessoaCitada(nome="João Pedro", descritor="filho do executivo")
+        ]}
+    )
+    monkeypatch.setattr(busca_worker, "extrair", lambda texto, ctx: com_descritor)
+
+    busca_worker.executar_busca(_criar_job(db))
+
+    joao = db.scalar(select(Pessoa).where(Pessoa.slug == "joao-pedro"))
+    assert joao.contexto_origem == "filho do executivo"
+    assert joao.identidade_confirmada is False  # ninguém confirmou quem é
+    rel = db.scalar(select(Relacao))
+    assert rel.evidencias[0]["descritor"] == "filho do executivo"
+
+
+def test_extrator_aceita_lista_de_nomes_simples(db):
+    """Compatibilidade: extrações antigas (list[str]) continuam válidas."""
+    from app.services.llm.extrator import EntidadesExtraidas
+
+    e = EntidadesExtraidas(pessoas_mencionadas=["Gustavo Pimenta"])
+    assert e.pessoas_mencionadas[0].nome == "Gustavo Pimenta"
+    assert e.pessoas_mencionadas[0].descritor is None
+
+
+def test_materia_assinada_pelo_alvo_nao_gera_conexoes(db, monkeypatch):
+    """Caso real: executivo ex-repórter ligado a Bush/Saddam por matéria de 2002."""
+    monkeypatch.setattr(
+        busca_worker, "baixar_artigo",
+        lambda url: {"texto": "Reportagem sobre a guerra. " * 40, "autor": "Eduardo Bartolomeo"},
+    )
+    pauta = EXTRACAO_FALSA.model_copy(
+        update={"pessoas_mencionadas": [PessoaCitada(nome="George W. Bush"), PessoaCitada(nome="Saddam Hussein")]}
+    )
+    monkeypatch.setattr(busca_worker, "extrair", lambda texto, ctx: pauta)
+
+    busca_worker.executar_busca(_criar_job(db))
+
+    # A menção fica (mostra a trajetória de jornalista)...
+    mencoes = db.scalars(select(Mencao)).all()
+    assert mencoes and all(m.papel == "autor" for m in mencoes)
+    # ...mas ninguém vira conexão, e as pessoas nem são criadas como nós
+    assert db.scalar(select(Relacao)) is None
+    assert db.scalar(select(Pessoa).where(Pessoa.slug == "saddam-hussein")) is None
+
+
+def test_papel_autor_do_llm_tambem_bloqueia_conexoes(db, monkeypatch):
+    """Sem byline no HTML, o veredito do LLM ainda protege o grafo."""
+    autoria = EXTRACAO_FALSA.model_copy(update={"papel_pessoa_alvo": "autor"})
+    monkeypatch.setattr(busca_worker, "extrair", lambda texto, ctx: autoria)
+
+    busca_worker.executar_busca(_criar_job(db))
+
+    assert db.scalar(select(Relacao)) is None
+
+
+def test_materia_assinada_fica_fora_do_briefing(db, monkeypatch):
+    """Sentimento de texto que ELE escreveu não é 'como a mídia o trata'."""
+    monkeypatch.setattr(
+        busca_worker, "baixar_artigo",
+        lambda url: {"texto": "Texto da reportagem. " * 40, "autor": "Eduardo Bartolomeo"},
+    )
+    chamadas = []
+    monkeypatch.setattr(
+        busca_worker, "sintetizar",
+        lambda dados: (chamadas.append(dados), BRIEFING_FALSO)[1],
+    )
+
+    busca_worker.executar_busca(_criar_job(db))
+
+    # As menções existem e foram analisadas...
+    mencoes = db.scalars(select(Mencao)).all()
+    assert mencoes and all(m.sentimento is not None for m in mencoes)
+    # ...mas nenhuma entrou no consolidado, então não houve material p/ briefing
+    assert chamadas == []
+    pessoa = db.scalar(select(Pessoa).where(Pessoa.slug == "eduardo-bartolomeo"))
+    assert pessoa.briefing is None
+
+
+def test_alvo_ausente_no_texto_descarta_mencao(db, monkeypatch):
+    ausente = EXTRACAO_FALSA.model_copy(update={"papel_pessoa_alvo": "ausente"})
+    monkeypatch.setattr(busca_worker, "extrair", lambda texto, ctx: ausente)
+
+    busca_worker.executar_busca(_criar_job(db))
+
+    assert db.scalars(select(Mencao)).all() == []
+
+
 def test_mencao_de_homonimo_e_descartada(db, monkeypatch):
     """Extrator diz que o texto é sobre OUTRA pessoa → menção deletada."""
     homonimo = EXTRACAO_FALSA.model_copy(update={"texto_e_sobre_alvo": False})
@@ -399,7 +489,7 @@ def test_materia_lista_ranking_rotula_evidencia(db, monkeypatch):
 def test_fanout_alto_tambem_vira_lista(db, monkeypatch):
     """Matéria citando 6+ pessoas juntas é lista mesmo sem rótulo do LLM."""
     muitos = EXTRACAO_FALSA.model_copy(
-        update={"pessoas_mencionadas": [f"Pessoa Num {i}" for i in range(7)]}
+        update={"pessoas_mencionadas": [PessoaCitada(nome=f"Pessoa Num {i}") for i in range(7)]}
     )
     monkeypatch.setattr(busca_worker, "extrair", lambda texto, ctx: muitos)
 

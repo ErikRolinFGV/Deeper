@@ -1,6 +1,17 @@
 """Modelo Relacao: aresta Pessoa <-> Pessoa do grafo de conexões inferidas."""
 
-from sqlalchemy import JSON, ForeignKey, Integer, String, UniqueConstraint
+from datetime import datetime
+
+from sqlalchemy import (
+    JSON,
+    Boolean,
+    DateTime,
+    ForeignKey,
+    Integer,
+    String,
+    Text,
+    UniqueConstraint,
+)
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.core.db import Base
@@ -24,3 +35,14 @@ class Relacao(Base):
 
     # Lista de IDs/URLs que comprovam a relação (mencao_id, evento_id, url, etc.)
     evidencias: Mapped[list[dict]] = mapped_column(JSON, default=list)
+
+    # ---- Anotação humana (o analista qualifica o que a máquina só inferiu) ----
+    # Ex.: rotulo="filho", nota="citados juntos em 2 matérias sobre a sucessão".
+    # Sobrevive a recoletas: o pipeline reforça a aresta, nunca a recria.
+    rotulo: Mapped[str | None] = mapped_column(String(80), nullable=True)
+    nota: Mapped[str | None] = mapped_column(Text, nullable=True)
+    anotado_em: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+    # O analista marcou a conexão como incorreta: some do grafo mas o registro
+    # fica (evita que a próxima coleta a ressuscite sem ninguém perceber).
+    oculta: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")

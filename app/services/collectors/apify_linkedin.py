@@ -76,6 +76,66 @@ def descobrir_linkedin_url(nome: str, contexto: str | None = None) -> str | None
     return None
 
 
+def _candidato_de_resultado(item: dict, url: str) -> dict:
+    """Converte um resultado do SerpAPI em candidato {nome, headline, url}.
+
+    Título típico do Google: "Nome Sobrenome - Cargo - Empresa | LinkedIn".
+    """
+    titulo = (item.get("title") or "").replace("| LinkedIn", "").strip()
+    partes = [p.strip() for p in titulo.split(" - ") if p.strip()]
+    nome = partes[0] if partes else titulo
+    headline = " — ".join(partes[1:]) if len(partes) > 1 else (item.get("snippet") or "")[:120]
+    return {"nome": nome, "headline": headline or None, "linkedin_url": url}
+
+
+def nome_a_partir_da_url(url: str) -> str:
+    """Deriva um nome legível do slug quando não há outra fonte.
+
+    'https://.../in/eduardo-bartolomeo-273927b' -> 'Eduardo Bartolomeo'
+    """
+    slug = url.rstrip("/").rsplit("/in/", 1)[-1].split("?")[0]
+    slug = re.sub(r"-[0-9a-f]{6,}$", "", slug)  # hash que o LinkedIn acrescenta
+    partes = [p for p in re.split(r"[-_.]+", slug) if p and not p.isdigit()]
+    return " ".join(p.capitalize() for p in partes) or slug
+
+
+def extrair_url_linkedin(texto: str) -> str | None:
+    """Devolve a URL canônica de perfil se o texto contiver uma."""
+    m = _LINKEDIN_IN.search(texto or "")
+    return m.group(0) if m else None
+
+
+def resolver_perfil_por_url(url: str) -> dict | None:
+    """Dado o link de um perfil, descobre nome e headline (1 busca SerpAPI).
+
+    Se a busca falhar, ainda devolve um candidato com o nome derivado do slug —
+    o link já identifica a pessoa, o nome é só apresentação.
+    """
+    canonica = extrair_url_linkedin(url)
+    if not canonica:
+        return None
+
+    logger.info(f"Resolvendo perfil por URL: {canonica}")
+    params = {
+        "engine": "google",
+        "q": canonica,
+        "hl": "pt-br",
+        "num": 5,
+        "api_key": settings.SERPAPI_KEY,
+    }
+    try:
+        resp = httpx.get(SERPAPI_URL, params=params, timeout=TIMEOUT)
+        resp.raise_for_status()
+        for item in resp.json().get("organic_results", []) or []:
+            achada = extrair_url_linkedin(item.get("link") or "")
+            if achada and achada.rstrip("/").lower() == canonica.rstrip("/").lower():
+                return _candidato_de_resultado(item, canonica)
+    except Exception as exc:
+        logger.warning(f"Não foi possível resolver {canonica} via busca: {exc}")
+
+    return {"nome": nome_a_partir_da_url(canonica), "headline": None, "linkedin_url": canonica}
+
+
 def sugerir_perfis_linkedin(consulta: str, limite: int = 5) -> list[dict]:
     """Busca perfis públicos candidatos no LinkedIn via SerpAPI.
 
@@ -115,12 +175,7 @@ def sugerir_perfis_linkedin(consulta: str, limite: int = 5) -> list[dict]:
         if url in vistos:
             continue
         vistos.add(url)
-        # Título típico: "Nome Sobrenome - Cargo - Empresa | LinkedIn"
-        titulo = (item.get("title") or "").replace("| LinkedIn", "").strip()
-        partes = [p.strip() for p in titulo.split(" - ") if p.strip()]
-        nome = partes[0] if partes else titulo
-        headline = " — ".join(partes[1:]) if len(partes) > 1 else (item.get("snippet") or "")[:120]
-        sugestoes.append({"nome": nome, "headline": headline or None, "linkedin_url": url})
+        sugestoes.append(_candidato_de_resultado(item, url))
         if len(sugestoes) >= limite:
             break
     return sugestoes

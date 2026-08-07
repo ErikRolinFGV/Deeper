@@ -10,9 +10,23 @@ from typing import Any
 
 from anthropic import Anthropic, APIError
 from loguru import logger
-from pydantic import BaseModel, Field, ValidationError
+from pydantic import BaseModel, Field, ValidationError, field_validator
 
 from app.core.config import settings
+
+
+class PessoaCitada(BaseModel):
+    """Pessoa relacionada ao alvo, com o que o texto diz sobre ela.
+
+    O descritor é o que permite ao analista saber, depois, QUAL "João Pedro"
+    é aquele nó do grafo — sem ele, o nome sozinho é indistinguível.
+    """
+
+    nome: str
+    descritor: str | None = Field(
+        default=None,
+        description="Como o texto identifica a pessoa: cargo, empresa ou vínculo",
+    )
 
 MODELO = "claude-sonnet-4-6"
 MAX_TOKENS = 2048
@@ -38,9 +52,30 @@ class EntidadesExtraidas(BaseModel):
             "organização quando identificável (ex: 'CEO da Vale', não apenas 'CEO')"
         ),
     )
-    pessoas_mencionadas: list[str] = Field(
+    pessoas_mencionadas: list[PessoaCitada] = Field(
         default_factory=list,
-        description="Outras pessoas citadas além da pessoa-alvo da análise",
+        description=(
+            "Pessoas que se RELACIONAM com a pessoa-alvo neste texto (encontro, "
+            "negociação, mesma empresa, declaração sobre a outra, sucessão), "
+            "cada uma com o descritor que o texto fornece. "
+            "NÃO listar todo nome que aparece no texto."
+        ),
+    )
+
+    @field_validator("pessoas_mencionadas", mode="before")
+    @classmethod
+    def _aceitar_lista_de_nomes(cls, v):
+        """Compatibilidade: aceita ["Fulano"] além de [{"nome": "Fulano"}]."""
+        if isinstance(v, list):
+            return [{"nome": p} if isinstance(p, str) else p for p in v]
+        return v
+    papel_pessoa_alvo: str = Field(
+        default="citado",
+        description=(
+            "Papel da pessoa-alvo NESTE texto: 'protagonista' (o texto é sobre "
+            "ela), 'citado' (aparece de passagem), 'autor' (ela assina o texto — "
+            "é repórter/colunista, não assunto), 'ausente' (não aparece)"
+        ),
     )
     valores_monetarios: list[str] = Field(
         default_factory=list,
@@ -111,8 +146,39 @@ EXTRATOR_TOOL: dict[str, Any] = {
             },
             "pessoas_mencionadas": {
                 "type": "array",
-                "items": {"type": "string"},
-                "description": "Outras pessoas citadas além da pessoa-alvo",
+                "items": {
+                    "type": "object",
+                    "properties": {
+                        "nome": {
+                            "type": "string",
+                            "description": "Nome da pessoa como aparece no texto",
+                        },
+                        "descritor": {
+                            "type": "string",
+                            "description": (
+                                "Como o texto identifica essa pessoa — cargo, "
+                                "empresa ou vínculo com a pessoa-alvo. Ex.: 'filho "
+                                "do executivo', 'CFO da Vale', 'sócio da gestora'. "
+                                "É o que permite distinguir homônimos depois."
+                            ),
+                        },
+                    },
+                    "required": ["nome"],
+                },
+                "description": (
+                    "Apenas pessoas que se relacionam com a pessoa-alvo no texto "
+                    "(encontro, negociação, mesma organização, sucessão, "
+                    "declaração de uma sobre a outra). Não listar todo nome citado."
+                ),
+            },
+            "papel_pessoa_alvo": {
+                "type": "string",
+                "enum": ["protagonista", "citado", "autor", "ausente"],
+                "description": (
+                    "Papel da pessoa-alvo neste texto. Use 'autor' quando ela "
+                    "assina a matéria (repórter/colunista) — nesse caso ela não "
+                    "é assunto do texto."
+                ),
             },
             "valores_monetarios": {
                 "type": "array",
@@ -175,7 +241,17 @@ Diretrizes:
   O fato noticiado em si (renovação de contrato, anúncio de CEO, demissão) NÃO é evento.
   Datas comemorativas (Natal, aniversário da empresa) também não.
 - `cargo_pessoa_alvo`: cargo atual da pessoa-alvo se o texto informar; caso contrário null.
-- `pessoas_mencionadas`: apenas nomes de outras pessoas além da pessoa-alvo da análise.
+- `pessoas_mencionadas`: SOMENTE pessoas que têm alguma relação com a pessoa-alvo
+  no texto (se encontraram, negociaram, trabalham juntas, uma falou sobre a outra,
+  disputam a mesma sucessão). Um nome que aparece no texto sem qualquer ligação
+  com a pessoa-alvo NÃO deve entrar — isso gera conexões falsas.
+  Para cada uma, preencha `descritor` com o que o texto informa sobre ela
+  (cargo, empresa ou vínculo). Um nome sem descritor é indistinguível de um
+  homônimo depois — se o texto disser algo sobre a pessoa, registre.
+- `papel_pessoa_alvo`: atenção especial ao valor 'autor'. Se o texto foi ESCRITO
+  pela pessoa-alvo (ela é repórter, colunista ou assina o artigo), ela não é
+  assunto da matéria: marque 'autor' e deixe `pessoas_mencionadas` VAZIA, porque
+  as pessoas citadas são pauta dela, não relações dela.
 - `empresas_mencionadas`: nomes próprios de companhias, não setores genéricos como "varejo" ou "tecnologia".
 - `datas`: use AAAA-MM-DD quando puder inferir o ano com segurança; caso contrário, omita.
 - `sentimento`: avalie o tom do texto sobre a pessoa-alvo especificamente, não o tom geral.

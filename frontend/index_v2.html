@@ -137,6 +137,26 @@
   .etapa-detalhe { margin-left: auto; font-size: 12px; color: var(--tx5); text-align: right; }
   .btn-fantasma { background: transparent; color: var(--tx4); border: 1px solid var(--bd4); border-radius: 8px; padding: 9px 20px; font-size: 13.5px; font-weight: 600; transition: border-color 0.15s, color 0.15s; white-space: nowrap; }
   .btn-fantasma:hover { border-color: var(--ac); color: var(--ac); }
+  .trecho-det { margin-top: 4px; }
+  .trecho-det > summary { cursor: pointer; font-size: 12px; color: var(--ac); list-style: none; padding: 2px 0; }
+  .trecho-det > summary::-webkit-details-marker { display: none; }
+  .trecho-det > summary::before { content: "▸ "; }
+  .trecho-det[open] > summary::before { content: "▾ "; }
+  .trecho-txt { font-size: 13px; line-height: 1.6; color: var(--tx3); background: var(--sup1); border-left: 2px solid var(--bd3); border-radius: 0 6px 6px 0; padding: 10px 12px; margin-top: 6px; }
+  .trecho-fonte { font-size: 11px; color: var(--tx5); margin-top: 8px; }
+  .modal-fundo { position: fixed; inset: 0; background: rgba(5,3,1,0.72); backdrop-filter: blur(3px); z-index: 200; display: flex; align-items: center; justify-content: center; padding: 24px; }
+  .modal-cx { background: var(--sup1); border: 1px solid var(--bd3); border-radius: 14px; width: 100%; max-width: 520px; max-height: 80vh; display: flex; flex-direction: column; overflow: hidden; box-shadow: 0 30px 70px rgba(0,0,0,0.6); }
+  .modal-cab { padding: 18px 22px 14px; border-bottom: 1px solid var(--bd1); }
+  .modal-lista { overflow-y: auto; flex: 1; }
+  .btn-excluir { font-size: 11.5px; font-weight: 700; color: var(--tx5); border: 1px solid var(--bd3); border-radius: 7px; padding: 5px 11px; background: transparent; cursor: pointer; white-space: nowrap; flex-shrink: 0; }
+  .btn-excluir:hover { color: var(--neg); border-color: var(--neg); background: rgba(229,72,77,0.08); }
+  .sug-abrir { font-size: 11px; font-weight: 700; color: var(--ac); border: 1px solid var(--bd3); border-radius: 999px; padding: 3px 10px; white-space: nowrap; text-decoration: none; flex-shrink: 0; }
+  .sug-abrir:hover { border-color: var(--ac); background: rgba(245,146,30,0.1); text-decoration: none; }
+  .badge-naoconf { font-size: 10px; font-weight: 800; letter-spacing: 0.04em; text-transform: uppercase; color: #B08D5E; border: 1px dashed #6E5F49; border-radius: 999px; padding: 2px 8px; }
+  .banner-ctx { display: flex; gap: 10px; align-items: flex-start; background: rgba(245,146,30,0.08); border: 1px solid rgba(245,146,30,0.3); border-radius: 10px; padding: 11px 14px; margin-bottom: 10px; }
+  .badge-autor { font-size: 10.5px; font-weight: 800; letter-spacing: 0.04em; text-transform: uppercase; color: #B08D5E; border: 1px solid #6E5F49; border-radius: 999px; padding: 2px 8px; }
+  .anot-input { background: var(--sup3); border: 1px solid var(--bd3); border-radius: 7px; padding: 7px 10px; font-size: 12.5px; color: var(--tx1); font-family: 'Nunito', sans-serif; outline: none; }
+  .anot-input:focus { border-color: var(--ac); }
   .btn-solido { background: linear-gradient(120deg, var(--ac-l), var(--ac) 55%, var(--ac-d)); color: #fff; border: none; border-radius: 8px; padding: 10px 24px; font-size: 14px; font-weight: 800; transition: box-shadow 0.2s, transform 0.15s; white-space: nowrap; }
   .btn-solido:hover { box-shadow: 0 6px 22px rgba(245,146,30,0.4); transform: translateY(-1px); }
 
@@ -156,19 +176,23 @@
 
   /* ── GRAFO ── */
   .grafo-shell { background: radial-gradient(ellipse 70% 60% at 50% 40%, rgba(245,146,30,0.06), transparent), var(--sup1); border: 1px solid var(--bd2); border-radius: 14px; overflow: hidden; position: relative; }
-  .grafo-shell.fullscreen { position: fixed; inset: 0; z-index: 200; border-radius: 0; }
+  .grafo-shell.fullscreen { position: fixed; inset: 0; z-index: 200; border-radius: 0; display: flex; flex-direction: column; }
   .grafo-toolbar { display: flex; align-items: center; gap: 18px; flex-wrap: wrap; padding: 14px 18px; border-bottom: 1px solid var(--bd1); background: rgba(22,17,9,0.7); position: relative; z-index: 5; }
   .grafo-canvas { width: 100%; height: 560px; }
-  .grafo-shell.fullscreen .grafo-canvas { height: calc(100vh - 118px); }
+  /* O canvas ocupa o que sobra: barra e legenda têm altura própria e nunca
+     são cortadas, independentemente de quantos itens a legenda tiver. */
+  .grafo-shell.fullscreen .grafo-canvas { flex: 1 1 auto; height: auto; min-height: 0; }
+  .grafo-shell.fullscreen .grafo-toolbar,
+  .grafo-shell.fullscreen .legenda { flex: 0 0 auto; }
   .ctl-grupo { display: flex; align-items: center; gap: 8px; }
   .ctl-label { font-size: 11.5px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--tx5); }
   .ctl-seg { display: flex; border: 1px solid var(--bd3); border-radius: 7px; overflow: hidden; }
   .ctl-seg button { background: transparent; border: none; color: var(--tx4); font-size: 12.5px; font-weight: 700; padding: 5px 12px; }
   .ctl-seg button.on { background: var(--ac); color: #fff; }
   .ctl-seg button:not(.on):hover { background: var(--sup4); color: var(--tx2); }
-  .legenda { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; padding: 10px 18px; border-top: 1px solid var(--bd1); background: rgba(22,17,9,0.7); font-size: 12px; color: var(--tx4); position: relative; z-index: 5; }
-  .leg-item { display: flex; align-items: center; gap: 7px; }
-  .leg-linha { width: 26px; height: 0; border-top-width: 3px; border-top-style: solid; }
+  .legenda { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding: 13px 18px; border-top: 1px solid var(--bd2); background: rgba(14,11,7,0.88); font-size: 13px; color: var(--tx3); position: relative; z-index: 5; }
+  .leg-item { display: flex; align-items: center; gap: 9px; background: rgba(245,239,230,0.04); border: 1px solid var(--bd2); border-radius: 999px; padding: 5px 13px 5px 10px; line-height: 1.2; }
+  .leg-linha { width: 32px; height: 0; border-top-width: 4px; border-top-style: solid; flex-shrink: 0; border-radius: 2px; }
   .grafo-card { position: absolute; background: rgba(31,24,14,0.97); border: 1px solid var(--bd4); border-radius: 12px; box-shadow: 0 16px 48px rgba(0,0,0,0.55); z-index: 10; animation: fadeup 0.25s ease both; }
   .evid-item { display: flex; flex-direction: column; gap: 2px; padding: 9px 0; border-bottom: 1px solid var(--bd1); }
   .evid-item:last-child { border-bottom: none; }
@@ -248,7 +272,7 @@
             </div>
             <div style="width:100%;display:flex;flex-direction:column;gap:12px;">
               <div class="busca-input-row" style="position:relative;">
-                <input id="inp-busca" placeholder="Pesquisar executivo por nome, cargo ou empresa… (ex.: CEO do Nubank)" autocomplete="off">
+                <input id="inp-busca" placeholder="Nome, cargo, empresa ou cole o link do LinkedIn…" autocomplete="off">
                 <button class="btn-buscar" onclick="submeterBusca()">Pesquisar</button>
                 <div id="dd-recentes" class="dd-recentes" style="display:none;"></div>
               </div>
@@ -259,11 +283,7 @@
                 <div class="toggle" id="tgl-forcar"><div class="dot"></div></div>
                 <span style="font-size:13px;color:var(--tx4);">Forçar nova coleta <span style="color:var(--tx5);">(ignora o cache de 7 dias)</span></span>
               </div>
-              <div style="font-size:13px;color:var(--tx5);">Você confirma a pessoa antes da coleta começar — a coleta leva de 20 a 60 segundos.</div>
-              <div style="font-size:13px;color:var(--tx5);">Experimente:
-                <a href="#" onclick="rebuscar('Eduardo Bartolomeo');return false;" style="font-weight:700;">Eduardo Bartolomeo</a> ·
-                <a href="#" onclick="rebuscar('CEO da Vale');return false;" style="font-weight:700;">CEO da Vale</a>
-              </div>
+              <div style="font-size:13px;color:var(--tx5);">Você confirma a pessoa antes da coleta começar — a coleta leva de 20 a 60 segundos. Já tem o link do LinkedIn? Cole na busca.</div>
             </div>
           </div>
         </div>
@@ -367,6 +387,7 @@
       <div id="dos-atualizado" style="font-size:12px;color:var(--tx5);"></div>
       <button class="btn-mini" onclick="window.print()" title="Gera um PDF pelo diálogo de impressão">Exportar PDF</button>
       <button class="btn-fantasma" style="color:var(--ac);white-space:nowrap;" onclick="atualizarDossie()">Atualizar dossiê</button>
+        <button class="btn-excluir" onclick="excluirDossieAtual()" title="Remove este dossiê do acervo">excluir</button>
     </div>
   </div>
   <div class="dossie-main">
@@ -408,6 +429,9 @@
             <span style="font-size:12.5px;color:var(--tx4);">Ocultar conexões de lista/ranking</span>
           </div>
           <div style="margin-left:auto;display:flex;gap:8px;">
+            <span id="grafo-layout-aviso" style="font-size:11.5px;color:var(--pos);opacity:0;transition:opacity 0.3s;margin-right:2px;"></span>
+            <button class="btn-ctl" onclick="reorganizarGrafo()" title="Descarta a disposição salva e recalcula o arranjo do zero">Reorganizar</button>
+            <button class="btn-ctl" onclick="abrirConexaoManual()" title="Registrar uma conexão que você conhece e a imprensa não mostrou">+ Conexão</button>
             <button class="btn-fantasma" style="padding:6px 14px;font-size:12.5px;" onclick="recentrarGrafo()">Recentrar</button>
             <button class="btn-fantasma" style="padding:6px 14px;font-size:12.5px;" id="btn-fs" onclick="alternarFullscreen()">⤢ Expandir</button>
           </div>
@@ -416,12 +440,13 @@
         <div id="card-no" class="grafo-card" style="display:none;left:16px;bottom:52px;padding:14px 18px;min-width:230px;max-width:340px;"></div>
         <div id="card-aresta" class="grafo-card" style="display:none;right:16px;top:70px;width:min(380px,calc(100% - 32px));max-height:70%;overflow:auto;padding:16px 18px;"></div>
         <div class="legenda">
-          <span style="font-weight:800;letter-spacing:0.08em;text-transform:uppercase;font-size:10.5px;color:var(--tx5);">Legenda</span>
+          <span style="font-weight:800;letter-spacing:0.1em;text-transform:uppercase;font-size:11px;color:var(--tx4);align-self:center;">Legenda</span>
           <span class="leg-item"><span class="leg-linha" style="border-top-color:var(--ac);"></span>laço formal (colegas / conselho)</span>
           <span class="leg-item"><span class="leg-linha" style="border-top-color:#8A7A64;"></span>co-mencionados na imprensa</span>
           <span class="leg-item"><span class="leg-linha" style="border-top-color:#B08D5E;border-top-style:dotted;"></span>co-participação em evento</span>
-          <span class="leg-item"><span class="leg-linha" style="border-top-color:#5E5240;border-top-style:dashed;"></span>apenas listas/rankings — não é relação genuína</span>
-          <span style="margin-left:auto;color:var(--tx5);">clique na linha para ver as evidências · clique no nó para detalhes</span>
+          <span class="leg-item"><span class="leg-linha" style="border-top-color:#5E5240;border-top-style:dashed;"></span>apenas listas/rankings, não é relação genuína</span>
+          <span class="leg-item"><span class="leg-linha" style="border-top-color:#3FBFB0;border-top-style:dashed;"></span>registrada pelo analista, conhecimento da casa</span>
+          <span style="margin-left:auto;color:var(--tx4);font-size:12.5px;">clique na linha para ver as evidências · clique no nó para detalhes</span>
         </div>
       </div>
     </div>
@@ -445,6 +470,7 @@
   </div>
 </div>
 
+<div id="modal-fusao" style="display:none;"></div>
 <script>
 /* ═══════════════ ACESSO A DADOS — API REAL ═══════════════ */
 const API_BASE = 'http://localhost:8000'; // trocar pela URL de produção no deploy
@@ -469,10 +495,12 @@ async function fetchJSON(url, opts) {
   return r.json();
 }
 
-async function buscarSugestoes(q) {
-  // GET /sugestoes — locais (banco, grátis) + linkedin (SerpAPI, 1 busca)
+async function buscarSugestoes(q, contexto) {
+  // GET /sugestoes — locais (banco, grátis) + linkedin (SerpAPI, 1 busca).
+  // `contexto` (descritor vindo do grafo) só entra na query do LinkedIn.
   try {
-    return await fetchJSON(`${API_BASE}/sugestoes?q=${encodeURIComponent(q)}&externas=true`);
+    const ctx = contexto ? `&contexto=${encodeURIComponent(contexto)}` : '';
+    return await fetchJSON(`${API_BASE}/sugestoes?q=${encodeURIComponent(q)}&externas=true${ctx}`);
   } catch (e) {
     return { locais: [], linkedin: [], erro: e.message };
   }
@@ -483,6 +511,7 @@ async function carregarAcervo() {
   try {
     const d = await fetchJSON(`${API_BASE}/acervo`);
     estado.acervo = d.pessoas || [];
+    estado.acervoTotal = d.total ?? estado.acervo.length;
   } catch (e) {
     estado.acervo = [];
     estado.acervoErro = e.message;
@@ -541,7 +570,7 @@ const estado = {
   timers: [], intervalo: null, cancelado: false,
   perfil: null, cy: null,
   prof: 2, pesoMin: 1, ocultarLista: false,
-  acervo: [], acervoErro: null, forcarProxima: false
+  acervo: [], acervoTotal: 0, acervoErro: null, layoutSalvo: null, forcarProxima: false, origemGrafo: null
 };
 const $ = id => document.getElementById(id);
 const MESES = ['jan','fev','mar','abr','mai','jun','jul','ago','set','out','nov','dez'];
@@ -665,16 +694,20 @@ function trocarAba(aba) {
 async function renderAcervo() {
   $('lista-acervo').innerHTML = '<div style="padding:22px 20px;font-size:13.5px;color:var(--tx4);">Carregando acervo…</div>';
   const locais = await carregarAcervo();
-  $('cont-acervo').textContent = locais.length;
+  $('cont-acervo').textContent = estado.acervoTotal;
   if (estado.acervoErro) {
     $('lista-acervo').innerHTML = `<div style="padding:22px 20px;font-size:13.5px;color:var(--neg);">${esc(estado.acervoErro)}</div>`;
     return;
   }
-  $('lista-acervo').innerHTML = locais.length ? locais.map((p, i) => `
+  const truncado = estado.acervoTotal > locais.length
+    ? `<div style="padding:10px 20px;font-size:12px;color:var(--tx5);border-bottom:1px solid var(--bd1);">Mostrando os ${locais.length} mais recentes de ${estado.acervoTotal} — o grafo continua usando o acervo inteiro.</div>`
+    : '';
+  $('lista-acervo').innerHTML = locais.length ? truncado + locais.map((p, i) => `
     <div class="sug-item" onclick="abrirDoAcervo(${i})">
       <div class="sug-avatar">${p.foto_url ? `<img src="${esc(p.foto_url)}" onerror="this.remove()" alt="">` : ''}<span style="position:absolute;">${p.foto_url ? '' : iniciais(p.nome)}</span></div>
       <div style="min-width:0;"><div class="sug-nome">${esc(p.nome)}</div><div class="sug-sub">${esc(p.cargo_atual || 'cargo não informado')}</div></div>
       ${p.tem_briefing ? '<span class="badge-pronto">dossiê pronto</span>' : ''}
+      <button class="btn-excluir" onclick="event.stopPropagation();excluirPessoa(${p.pessoa_id}, '${esc(p.nome)}')" title="Remove este dossiê e tudo que foi coletado sobre a pessoa">excluir</button>
     </div>`).join('')
     : '<div style="padding:22px 20px;font-size:13.5px;color:var(--tx4);">O acervo ainda está vazio — pesquise um executivo para começar.</div>';
 }
@@ -711,36 +744,58 @@ async function renderStatus() {
     </div>`).join('');
 }
 const FAQ_SECOES = [
-  ['Pesquisa e seleção', [
+  ['Pesquisa e identidade', [
     ['Como pesquiso uma pessoa?', 'Digite nome, cargo ou empresa ("CEO do Nubank") e pressione Enter. Um painel mostra quem já está no acervo e os candidatos encontrados no LinkedIn — a coleta só começa quando você escolhe a pessoa.'],
-    ['Por que preciso escolher numa lista em vez de a busca ir direto?', 'É a garantia contra homônimos: "Eduardo Vale" pode ser um CEO ou um analista de sistemas. O headline do LinkedIn ao lado de cada candidato permite confirmar a identidade antes de gastar uma coleta de 20–60s na pessoa errada.'],
-    ['Digitei o nome com erro de grafia. Tem problema?', 'Sim — typos podem criar registros duplicados no banco (a busca aproximada ainda não existe). Confirme o nome no painel de sugestões antes de clicar; prefira sempre selecionar o candidato do LinkedIn, que traz o nome oficial do perfil.'],
-    ['O que aparece quando clico na barra de pesquisa?', 'Um atalho com os últimos 5 pesquisados da sessão. O histórico completo (até 20) fica na aba Histórico, na barra lateral.']
+    ['Posso pesquisar pelo link do LinkedIn?', 'Sim, e é a forma mais segura: cole o endereço do perfil na barra de busca. O link identifica a pessoa com precisão, então não há risco de homônimo. Se aquele perfil já estiver no acervo, o dossiê abre na hora, sem custo de coleta.'],
+    ['Por que preciso escolher numa lista em vez de a busca ir direto?', 'É a garantia contra homônimos. Pesquisando "CEO do Nubank" solto, o sistema pode trazer um diretor qualquer da empresa; pesquisando "Renato Costa", pode trazer o CIO da Odontoprev em vez do CEO da Friboi. O headline ao lado de cada candidato permite confirmar quem é antes de gastar uma coleta na pessoa errada.'],
+    ['Como confiro se o candidato é mesmo a pessoa certa?', 'Cada sugestão do LinkedIn tem o botão "ver perfil ↗", que abre o perfil numa aba nova sem disparar a coleta. Confira foto e cargo e só então escolha.'],
+    ['Digitei o nome com erro de grafia. Tem problema?', 'A ferramenta não corrige grafia sozinha, mas a seleção obrigatória protege: você sempre escolhe um perfil real, e o nome vem do LinkedIn. Se ainda assim criar um registro errado, dá para excluí-lo na aba Acervo.'],
+    ['O que aparece quando clico na barra de pesquisa?', 'Um atalho com os últimos 5 pesquisados da sessão. O histórico completo (até 20) fica na aba Histórico.']
   ]],
   ['Coleta e cache', [
-    ['Quanto tempo demora uma coleta?', 'De 20 a 60 segundos: busca na imprensa (O Globo, Valor, Estadão, InfoMoney, Exame), coleta do LinkedIn, análise com IA (briefing, sentimento, temas) e montagem do grafo.'],
-    ['O que acontece se eu cancelar no meio?', 'Nada se perde: a coleta continua no servidor e o resultado fica no cache — a próxima busca por essa pessoa abre na hora.'],
-    ['Por que algumas buscas abrem instantaneamente?', 'Dossiês ficam válidos por 7 dias no acervo. Pesquisar alguém que já está lá pula a coleta e abre direto — a aba Acervo lista todo mundo nessa situação.'],
-    ['E se eu precisar de dados mais frescos que o cache?', 'Ligue "Forçar nova coleta" antes de pesquisar, ou use o botão "Atualizar dossiê" no topo do próprio dossiê — ambos ignoram o cache de 7 dias e recoletam tudo.'],
-    ['A coleta falhou. E agora?', 'A tela de erro mostra a causa reportada pelo servidor (ex.: bloqueio anti-robô do LinkedIn, API fora do ar, processamento acima de 3 minutos). "Tentar novamente" repete exatamente a mesma seleção — você não precisa procurar a pessoa de novo. A aba Status mostra a saúde de cada fonte.']
+    ['Quanto tempo demora uma coleta?', 'De 20 a 60 segundos: busca na imprensa, leitura das matérias, coleta do LinkedIn, análise com IA (briefing, sentimento, temas) e montagem do grafo.'],
+    ['O que acontece se eu cancelar no meio?', 'Nada se perde: a coleta continua no servidor e o resultado fica no acervo — a próxima busca por essa pessoa abre na hora.'],
+    ['Por que algumas buscas abrem instantaneamente?', 'Dossiês ficam válidos por 7 dias. Pesquisar alguém que já está no acervo pula a coleta e abre direto. O chip no topo do dossiê avisa quando ele está perto de expirar.'],
+    ['E se eu precisar de dados mais frescos que o cache?', 'Ligue "Forçar nova coleta" antes de pesquisar, ou use "Atualizar dossiê" no topo do próprio dossiê — ambos ignoram o cache e recoletam tudo.'],
+    ['A coleta falhou. E agora?', 'A tela de erro mostra a causa reportada pelo servidor (bloqueio anti-robô do LinkedIn, API fora do ar, processamento acima de 3 minutos). "Tentar novamente" repete exatamente a mesma seleção. A aba Status mostra a saúde de cada fonte.'],
+    ['Posso apagar um dossiê?', 'Sim. Há um botão "excluir" em cada item da aba Acervo e no cabeçalho do dossiê. Remove o briefing, as menções e as conexões daquela pessoa — e também os nós que só existiam por causa dela.']
   ]],
   ['Lendo o dossiê', [
-    ['O que é o briefing executivo?', 'Três parágrafos gerados por IA a partir das fontes coletadas: quem é a pessoa (formação e trajetória), o que pensa e como a mídia a trata, e o que mudou nos últimos 12 meses — o essencial para preparar uma aproximação.'],
-    ['Como leio o indicador de sentimento das menções?', 'Cada matéria recebe uma nota de −1 (negativa) a +1 (positiva), mostrada como um marcador na régua vermelho→cinza→verde. Um traço "—" significa que a menção foi coletada mas ainda não analisada — uma recoleta resolve.'],
-    ['Alguns campos aparecem como "não informado". Por quê?', 'As fontes públicas nem sempre trazem tudo: datas de cargos, local de eventos e cargo de conexões podem vir vazios. O app mostra o que existe e sinaliza o que falta, sem inventar dados.'],
-    ['A foto do executivo sumiu.', 'As fotos vêm do LinkedIn e a URL expira após um tempo. Quando isso acontece, mostramos as iniciais no lugar; uma recoleta renova a foto.']
+    ['O que é o briefing executivo?', 'Três parágrafos gerados por IA a partir das fontes coletadas: quem é a pessoa (formação e trajetória), o que pensa e como a mídia a trata, e o que mudou nos últimos 12 meses. É um rascunho de analista — revise antes de enviar a um cliente.'],
+    ['A IA pode inventar alguma coisa?', 'A arquitetura reduz muito esse risco: o modelo primeiro preenche campos verificáveis (quem foi citado, empresas, datas, sentimento) e só depois escreve o texto, usando apenas o que foi apurado. Cada afirmação tem fonte clicável. Ainda assim, recomendamos revisão humana antes de uso externo.'],
+    ['Como leio o indicador de sentimento das menções?', 'Cada matéria recebe uma nota de −1 (negativa) a +1 (positiva), como um marcador na régua vermelho→cinza→verde. Um traço "—" significa coletada mas ainda não analisada; uma recoleta resolve.'],
+    ['O que significa "assinada por ele(a)" numa menção?', 'A pessoa escreveu aquela matéria — era repórter ou colunista, não assunto. Essas matérias contam como trajetória, mas não geram conexões no grafo nem entram no cálculo de sentimento: o tom de um texto que ela escreveu não diz como a mídia a trata.'],
+    ['O que é "ver trecho coletado"?', 'Mostra o trecho da versão pública da matéria que usamos na análise, para você julgar sem sair da ferramenta. A leitura integral continua sendo no site do veículo — a ferramenta não contorna paywall.'],
+    ['Alguns campos aparecem como "não informado". Por quê?', 'As fontes públicas nem sempre trazem tudo. O app mostra o que existe e sinaliza o que falta, em vez de inventar.'],
+    ['A foto do executivo sumiu.', 'As fotos vêm do LinkedIn e a URL expira. Quando isso acontece, mostramos as iniciais; uma recoleta renova a foto.']
   ]],
   ['Grafo de conexões', [
-    ['O que significam as linhas diferentes?', 'Laranja sólida: laço formal (ex-colegas de empresa ou conselho em comum, inferido de períodos sobrepostos no LinkedIn). Cinza: co-menção na imprensa. Pontilhada: co-participação em evento. Tracejada esmaecida: pessoas citadas juntas apenas em listas/rankings.'],
-    ['Por que algumas conexões nascem apagadas?', 'Aparecer no mesmo ranking ("50 mais influentes") não é relação genuína. Essas arestas nascem esmaecidas e rotuladas, e o filtro "Ocultar conexões de lista/ranking" as remove da visualização.'],
-    ['Como vejo as evidências de uma relação?', 'Clique na linha: um painel conta a história ("ex-colegas na Vale: Diretor Presidente / CFO", "co-mencionados em 3 matérias") e lista até 8 evidências com link para cada matéria.'],
-    ['Para que servem os controles de profundidade e peso?', 'Profundidade define quantos saltos a partir da pessoa raiz entram no grafo (1 a 3). Peso mínimo esconde relações fracas (com poucas evidências) — útil em redes densas. "Expandir" abre o grafo em tela cheia para demos.'],
-    ['Posso navegar para outra pessoa a partir do grafo?', 'Sim — clique num nó: se a pessoa já está no acervo, o mini-card oferece "Abrir dossiê".']
+    ['O que significam as linhas diferentes?', 'Laranja sólida: laço formal (ex-colegas de empresa ou conselho em comum, por períodos sobrepostos no LinkedIn). Cinza: co-menção na imprensa. Pontilhada: co-participação em evento. Tracejada esmaecida: citados juntos apenas em listas/rankings. Tracejada turquesa: conexão registrada por um analista.'],
+    ['Por que algumas conexões nascem apagadas?', 'Aparecer no mesmo ranking ("50 mais influentes") não é relação genuína. Essas arestas nascem esmaecidas e rotuladas, e o filtro "Ocultar conexões de lista/ranking" as remove.'],
+    ['Como vejo as evidências de uma relação?', 'Clique na linha: o painel conta a história ("ex-colegas na Vale: Diretor Presidente / CFO", "co-mencionados em 3 matérias") e lista até 8 evidências com data e link para cada matéria.'],
+    ['Para que servem profundidade e peso mínimo?', 'Profundidade é o alcance: quantos saltos a partir da pessoa raiz entram no grafo (1 a 3). Peso mínimo é o filtro de qualidade: esconde relações sustentadas por poucas evidências. "Expandir" abre em tela cheia.'],
+    ['O que quer dizer "identidade não confirmada" num nó?', 'Aquele nó é um nome que a IA extraiu de uma matéria — ninguém verificou de qual pessoa se trata. Ele aparece com borda tracejada e, quando a matéria informou, mostra o descritor ("filho do executivo", "CFO da Vale"). Nós de pessoas já pesquisadas aparecem normais.'],
+    ['Posso navegar para outra pessoa a partir do grafo?', 'Sim. Clique num nó: se ela já tem dossiê, o card oferece "Abrir dossiê". Se não, oferece "Pesquisar", que leva à busca com o nome preenchido e o contexto da matéria — você confirma quem é antes de coletar.'],
+    ['Encontrei uma conexão que não é real. Como removo?', 'Clique na linha e use "marcar conexão como incorreta". Ela some do grafo, e o registro fica salvo para não voltar sozinho numa próxima coleta.'],
+    ['Em redes grandes os nomes somem. Por quê?', 'Acima de cerca de 18 pessoas, mostrar todos os nomes ao mesmo tempo vira ruído ilegível. Então eles aparecem sob demanda: passe o mouse num nó e a vizinhança dele se acende com os nomes, ou aproxime o zoom para ver todos. O mesmo vale para o nome escrito sobre cada linha.'],
+    ['Arrumei o grafo arrastando os nós. Isso se perde?', 'Não. Cerca de um segundo depois de você soltar, a disposição é salva no servidor e aparece um aviso discreto na barra. Ao reabrir o dossiê, o grafo volta exatamente como você deixou — e a equipe inteira vê o mesmo arranjo, porque organizar uma rede grande também é trabalho de curadoria.'],
+    ['Como volto ao arranjo automático?', 'Botão "Reorganizar" na barra do grafo: descarta a disposição salva e recalcula o layout do zero. Se a rede tiver crescido desde a última vez que você organizou, as pessoas novas entram num anel ao redor, sem bagunçar o que já estava posicionado.'],
+    ['Liguei o filtro de listas e um grupo inteiro sumiu. É erro?', 'Não — é proteção. Se aquele grupo se ligava ao resto apenas por uma conexão de ranking, ao esconder essa ligação ele deixa de ter qualquer caminho até a pessoa pesquisada. Mostrá-lo solto na tela sugeriria uma relação que não existe. O contador avisa quantas conexões ficaram sem ligação com a raiz; desligue o filtro para vê-las de volta.'],
+    ['Posso anotar uma conexão?', 'Sim. No painel da aresta há campo para o vínculo ("filho", "sócio", "mentor") e uma observação livre. O vínculo passa a aparecer escrito na própria linha do grafo, e a anotação sobrevive a novas coletas.']
+  ]],
+  ['Curadoria: quando você sabe mais que a ferramenta', [
+    ['A mesma pessoa aparece com dois nomes diferentes. O que faço?', 'É comum: a imprensa cita "Dani Braun" e o LinkedIn diz "Daniela Braun". Clique no nó e use "esta pessoa já está no acervo com outro nome" — escolha o registro correto e os dois viram um só, com as redes unidas. O nome antigo fica salvo como apelido, então as próximas coletas já reconhecem.'],
+    ['Sei de uma conexão que a imprensa não mostrou. Posso registrar?', 'Pode: botão "+ Conexão" na barra do grafo. Escolha a pessoa, descreva a natureza do vínculo e explique como você sabe disso. A justificativa é obrigatória — sem fonte pública, o registro do porquê é o que torna a conexão auditável.'],
+    ['Por que a conexão que eu criei aparece diferente das outras?', 'Porque ela é de outra natureza. As demais vêm de evidência pública verificável; a sua vem do conhecimento da casa. Ambas são valiosas, mas nunca devem ser confundidas — por isso o traço próprio e a marcação "não é fonte pública" nas evidências.'],
+    ['Só consigo conectar algumas pessoas. Por quê?', 'Conexões manuais só podem ser criadas entre pessoas já pesquisadas. Isso evita que o acervo vire depósito de nomes soltos. Pesquise a pessoa primeiro e a conexão fica disponível.']
   ]],
   ['Dados e privacidade', [
-    ['De onde vêm os dados?', 'Somente fontes públicas: o perfil público do LinkedIn e a imprensa brasileira (O Globo, Valor, Estadão, InfoMoney, Exame). Nada de bases privadas ou dados vazados.'],
-    ['O histórico fica salvo onde?', 'Só na sua sessão do navegador — fechar a aba limpa o histórico. Já o acervo de dossiês fica no servidor, compartilhado pela equipe.'],
-    ['Preciso de login?', 'Não nesta versão — a ferramenta é de uso interno da FSB. Autenticação está planejada para as próximas versões.']
+    ['De onde vêm os dados?', 'Somente fontes públicas: o perfil público do LinkedIn (sem login) e a imprensa brasileira (Valor, Estadão, Folha, O Globo, Exame, InfoMoney, NeoFeed, Veja, IstoÉ Dinheiro, Brazilian Report).'],
+    ['O grafo usa a lista de conexões do LinkedIn?', 'Não — essa lista não é pública e não é acessada. A rede é inferida de fatos públicos: trajetórias que se sobrepõem e matérias que citam as duas pessoas. Por isso cada linha vem com as evidências anexadas.'],
+    ['A ferramenta contorna paywall?', 'Não. Ela mostra o trecho da versão pública da matéria, que é o que qualquer visitante vê, com link para a íntegra no veículo. Reproduzir matéria completa é assunto de licenciamento, não de tecnologia.'],
+    ['Vocês coletam dados sensíveis?', 'Não. Nada de contatos, mensagens, telefone ou dados sensíveis (saúde, religião, opinião política). Apenas informação profissional de figuras públicas em capacidade profissional.'],
+    ['O histórico fica salvo onde?', 'Só na sua sessão do navegador — fechar a aba limpa. Já o acervo de dossiês fica no servidor, compartilhado pela equipe.'],
+    ['Preciso de login?', 'Não nesta versão — é um MVP de uso interno rodando localmente. Autenticação e deploy em servidor estão previstos para a próxima fase.']
   ]]
 ];
 $('grade-ajuda').innerHTML = FAQ_SECOES.map(([secao, itens]) => `
@@ -761,7 +816,11 @@ async function submeterBusca() {
   painel.innerHTML = `<div class="sugestoes"><div style="display:flex;align-items:center;gap:12px;padding:22px 20px;color:var(--tx4);font-size:13.5px;">
     <span style="width:18px;height:18px;border-radius:50%;border:2px solid var(--ac);border-top-color:transparent;animation:spin 0.9s linear infinite;flex-shrink:0;"></span>
     Procurando "${esc(q)}" no acervo e no LinkedIn…</div></div>`;
-  const sug = await buscarSugestoes(q);
+  // contexto só vale para a pessoa que veio do grafo — some se o texto mudou
+  const org = (estado.origemGrafo && estado.origemGrafo.nome.toLowerCase() === q.toLowerCase())
+    ? estado.origemGrafo : null;
+  if (!org) estado.origemGrafo = null;
+  const sug = await buscarSugestoes(q, org ? org.contexto : '');
   const locais = (sug.locais||[]).map((p,i) => `
     <div class="sug-item" onclick="escolherLocal(${i})">
       <div class="sug-avatar">${p.foto_url ? `<img src="${esc(p.foto_url)}" onerror="this.remove()" alt="">` : ''}<span style="position:absolute;">${p.foto_url ? '' : iniciais(p.nome)}</span></div>
@@ -771,20 +830,34 @@ async function submeterBusca() {
   const li = (sug.linkedin||[]).map((p,i) => `
     <div class="sug-item" onclick="escolherLinkedin(${i})">
       <div class="sug-avatar" style="background:var(--bd2);color:var(--tx4);">${iniciais(p.nome)}</div>
-      <div style="min-width:0;"><div class="sug-nome">${esc(p.nome)}</div><div class="sug-sub" style="color:var(--tx3);">${esc(p.headline || '')}</div></div>
-      <span class="badge-li">in/…${esc((p.linkedin_url||'').split('/in/')[1] || '').slice(0,22)}</span>
+      <div style="min-width:0;flex:1;"><div class="sug-nome">${esc(p.nome)}</div><div class="sug-sub" style="color:var(--tx3);">${esc(p.headline || 'sem descrição no resultado da busca')}</div></div>
+      <a class="sug-abrir" href="${esc(p.linkedin_url)}" target="_blank" rel="noopener"
+         onclick="event.stopPropagation();"
+         title="Abre o perfil numa nova aba para você conferir antes de coletar">ver perfil ↗</a>
     </div>`).join('');
   painel.innerHTML = `<div class="sugestoes">
+    ${org ? `<div class="banner-ctx">
+      <span style="color:var(--ac);font-size:15px;line-height:1;">◆</span>
+      <div style="font-size:12.5px;color:var(--tx3);line-height:1.5;">
+        Veio do grafo de <strong style="color:var(--tx1);">${esc(org.deQuem || 'outro executivo')}</strong>.
+        ${org.contexto ? `Na imprensa, este <strong style="color:var(--tx1);">${esc(org.nome)}</strong> aparece como <strong style="color:var(--ac);">${esc(org.contexto)}</strong> —` : 'As fontes não trouxeram cargo nem vínculo para este nome —'}
+        confira o headline antes de escolher, para não coletar um homônimo.
+      </div></div>` : ''}
     <div class="sug-header">
-      <span style="font-size:13px;color:var(--tx3);">Confirme quem você procura — <strong style="color:var(--tx1);">a coleta só começa depois da sua escolha</strong></span>
+      <span style="font-size:13px;color:var(--tx3);">${sug.por_url
+        ? 'Perfil identificado pelo link — <strong style="color:var(--tx1);">confira e clique para coletar</strong>'
+        : 'Confirme quem você procura — <strong style="color:var(--tx1);">a coleta só começa depois da sua escolha</strong>'}</span>
       <span onclick="fecharSugestoes()" style="cursor:pointer;color:var(--tx5);font-size:18px;line-height:1;">×</span>
     </div>
     ${locais ? `<div class="sug-secao-titulo"><span style="width:7px;height:7px;border-radius:50%;background:var(--ac);"></span>No acervo — resposta instantânea</div>${locais}` : ''}
-    ${li ? `<div class="sug-secao-titulo" style="border-top:1px solid var(--bd1);margin-top:6px;padding-top:14px;"><span style="width:7px;height:7px;border-radius:50%;background:var(--tx5);"></span>LinkedIn — inicia uma coleta (20–60s)</div>${li}` : ''}
-    ${!locais && !li ? (sug.erro
+    ${li ? `<div class="sug-secao-titulo" style="border-top:1px solid var(--bd1);margin-top:6px;padding-top:14px;"><span style="width:7px;height:7px;border-radius:50%;background:var(--tx5);"></span>${sug.por_url ? 'Perfil do link — inicia uma coleta (20–60s)' : 'LinkedIn — inicia uma coleta (20–60s)'}</div>${li}` : ''}
+    ${!locais && !li && sug.por_url ? '<div style="padding:20px;color:var(--tx4);font-size:13.5px;">Não consegui identificar esse link. Confira se é um endereço de perfil (linkedin.com/in/…).</div>' : ''}
+    ${!locais && !li && !sug.por_url ? (sug.erro
       ? `<div style="padding:20px;color:var(--neg);font-size:13.5px;">${esc(sug.erro)}</div>`
       : '<div style="padding:20px;color:var(--tx4);font-size:13.5px;">Nenhum resultado. Refine o nome ou tente cargo + empresa.</div>') : ''}
-    <div style="padding:10px 20px 14px;font-size:11.5px;color:var(--tx5);">O headline do LinkedIn ajuda a não confundir homônimos — confira antes de clicar. Use ↑ ↓ e Enter para escolher.</div>
+    <div style="padding:10px 20px 14px;font-size:11.5px;color:var(--tx5);">${sug.por_url
+      ? 'O link identifica a pessoa com precisão — não há risco de homônimo aqui.'
+      : 'Em dúvida entre dois nomes? Clique em "ver perfil ↗" para abrir o LinkedIn numa nova aba antes de escolher. Use ↑ ↓ e Enter para navegar.'}</div>
   </div>`;
   estado.sugestoesAtuais = sug;
   estado.kbIdx = -1;
@@ -942,6 +1015,7 @@ function voltarBusca() {
 
 /* ═══════════════ DOSSIÊ ═══════════════ */
 async function abrirDossie(pessoaId) {
+  estado.layoutSalvo = null;   // cada pessoa tem a sua disposição
   const p = await carregarPerfil(pessoaId);
   estado.perfil = p;
   const pes = p.pessoa;
@@ -985,10 +1059,18 @@ async function abrirDossie(pessoaId) {
       </div>
       <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
         <span class="badge-fonte">${FONTES[m.fonte] || m.fonte}</span>
+        ${m.papel === 'autor' ? '<span class="badge-autor" title="A pessoa assinou esta matéria — ela era o repórter, não o assunto. Não gera conexões no grafo.">assinada por ele(a)</span>' : ''}
         <span style="font-size:12px;color:var(--tx5);">${fmtData(m.data_publicacao)}</span>
         <span style="width:1px;height:12px;background:var(--bd3);"></span>
         ${(m.temas||[]).map(t => `<span class="chip-tema">${esc(t)}</span>`).join('')}
-      </div></div>`;
+      </div>
+      ${m.trecho ? `<details class="trecho-det">
+        <summary>ver trecho coletado</summary>
+        <div class="trecho-txt">${esc(m.trecho)}${m.trecho_truncado ? '…' : ''}
+          <div class="trecho-fonte">Trecho coletado da versão pública da matéria, para contexto e verificação.
+            <a href="${esc(m.url)}" target="_blank" rel="noopener">Ler a íntegra no veículo ↗</a></div>
+        </div></details>` : ''}
+      </div>`;
   }).join('') : '<div class="vazio">Nenhuma menção na imprensa encontrada — pessoa com baixa exposição de mídia ou coleta muito recente.</div>';
   // eventos
   $('lista-eventos').innerHTML = p.eventos.length ? p.eventos.map(ev => `
@@ -1042,14 +1124,35 @@ async function copiarBriefing() {
 }
 
 /* ═══════════════ GRAFO ═══════════════ */
-const COR_ARESTA = { colega_empresa: '#F5921E', co_board: '#F5921E', co_mencionado: '#8A7A64', co_evento: '#B08D5E' };
-const NOME_TIPO = { colega_empresa: 'Ex-colegas de empresa', co_board: 'Conselho em comum', co_mencionado: 'Co-mencionados na imprensa', co_evento: 'Co-participação em evento' };
+const COR_ARESTA = { colega_empresa: '#F5921E', co_board: '#F5921E', co_mencionado: '#8A7A64', co_evento: '#B08D5E', manual: '#3FBFB0' };
+const NOME_TIPO = { colega_empresa: 'Ex-colegas de empresa', co_board: 'Conselho em comum', co_mencionado: 'Co-mencionados na imprensa', co_evento: 'Co-participação em evento', manual: 'Registrada pelo analista' };
 function ehSoLista(e) { return (e.evidencias||[]).length > 0 && e.evidencias.every(ev => ev.contexto === 'lista'); }
 
 async function atualizarGrafo(animar) {
   const g = await carregarGrafo(estado.perfil.pessoa.id, estado.prof, estado.pesoMin);
   estado.grafoDados = g;
-  const edgesVis = g.edges.filter(e => !(estado.ocultarLista && ehSoLista(e)));
+  if (g.layout !== undefined && estado.layoutSalvo === null) estado.layoutSalvo = g.layout;
+  const candidatas = g.edges.filter(e => !(estado.ocultarLista && ehSoLista(e)));
+  // Esconder uma aresta pode desligar um grupo inteiro da raiz (ex.: o único
+  // vínculo era uma lista/ranking). Um aglomerado solto na tela sugere uma
+  // relação que não existe — então mantemos só o que ainda alcança a raiz.
+  const raizId = estado.perfil.pessoa.id;
+  const vizinhanca = {};
+  candidatas.forEach(e => {
+    (vizinhanca[e.source] = vizinhanca[e.source] || []).push(e.target);
+    (vizinhanca[e.target] = vizinhanca[e.target] || []).push(e.source);
+  });
+  const alcancaveis = new Set([raizId]);
+  const nivel = { [raizId]: 0 };   // distância em saltos: alimenta o layout em camadas
+  const fila = [raizId];
+  while (fila.length) {
+    const atual = fila.shift();
+    (vizinhanca[atual] || []).forEach(v => {
+      if (!alcancaveis.has(v)) { alcancaveis.add(v); nivel[v] = nivel[atual] + 1; fila.push(v); }
+    });
+  }
+  const edgesVis = candidatas.filter(e => alcancaveis.has(e.source) && alcancaveis.has(e.target));
+  const desconectados = candidatas.length - edgesVis.length;
   const grau = {};
   edgesVis.forEach(e => { grau[e.source] = (grau[e.source]||0)+1; grau[e.target] = (grau[e.target]||0)+1; });
   const idsVis = new Set();
@@ -1058,12 +1161,35 @@ async function atualizarGrafo(animar) {
   // contadores
   const formais = edgesVis.filter(e => e.tipo === 'colega_empresa' || e.tipo === 'co_board').length;
   const deListas = g.edges.filter(ehSoLista).length;
-  $('grafo-contadores').textContent = `${nodesVis.length - 1} conexões · ${formais} ${formais === 1 ? 'laço formal' : 'laços formais'} · ${deListas} de listas/rankings${estado.ocultarLista && deListas ? ' (ocultas)' : ''}`;
+  $('grafo-contadores').textContent =
+    `${nodesVis.length - 1} conexões · ${formais} ${formais === 1 ? 'laço formal' : 'laços formais'} · `
+    + `${deListas} de listas/rankings${estado.ocultarLista && deListas ? ' (ocultas)' : ''}`
+    + (desconectados ? ` · ${desconectados} sem ligação com a raiz após o filtro` : '')
+    + (nodesVis.length > 18 ? ' · passe o mouse ou aproxime para ver os nomes' : '');
 
   const els = [
-    ...nodesVis.map(n => ({ data: { id: 'n' + n.id, pid: n.id, label: n.label, cargo: n.cargo_atual, foto: n.foto_url || null, raiz: n.raiz ? 1 : 0, grau: grau[n.id] || 0 } })),
-    ...edgesVis.map((e, i) => ({ data: { id: 'e' + i, source: 'n' + e.source, target: 'n' + e.target, tipo: e.tipo, peso: e.peso, soLista: ehSoLista(e) ? 1 : 0, idx: i } }))
+    ...nodesVis.map(n => ({ data: { id: 'n' + n.id, pid: n.id, label: n.label, cargo: n.cargo_atual, ctx: n.contexto_origem || null, conf: n.identidade_confirmada ? 1 : 0, dossie: n.tem_dossie ? 1 : 0, naoConf: (n.raiz || n.identidade_confirmada) ? 0 : 1, foto: n.foto_url || null, raiz: n.raiz ? 1 : 0, grau: grau[n.id] || 0, niv: nivel[n.id] ?? 9 } })),
+    ...edgesVis.map((e, i) => ({ data: { id: 'e' + i, source: 'n' + e.source, target: 'n' + e.target, tipo: e.tipo, peso: e.peso, soLista: ehSoLista(e) ? 1 : 0, idx: i, rid: e.id, ...(e.rotulo ? { rotulo: e.rotulo } : {}) } }))
   ];
+  // Disposição salva pelo analista: aplicada como posições fixas. Nós que
+  // apareceram depois (rede cresceu) entram num anel ao redor da raiz, em
+  // posição estável, para o analista arrastar de onde quiser.
+  const posSalvas = estado.layoutSalvo || {};
+  const idsSalvos = nodesVis.filter(x => posSalvas[x.id]).length;
+  const temLayout = idsSalvos > 0 && idsSalvos >= Math.ceil(nodesVis.length * 0.5);
+  const semPos = nodesVis.filter(x => !posSalvas[x.id]).map(x => x.id);
+  const posicaoDeReserva = (pid) => {
+    const i = semPos.indexOf(pid);
+    const ang = (2 * Math.PI * (i < 0 ? 0 : i)) / Math.max(1, semPos.length);
+    const raio = 260 + semPos.length * 6;
+    return { x: Math.cos(ang) * raio, y: Math.sin(ang) * raio };
+  };
+
+  // Acima de ~18 nós os nomes começam a se sobrepor e o grafo vira ruído.
+  // Nesse caso os rótulos só aparecem no que está em foco (hover) ou com zoom.
+  const denso = nodesVis.length > 18;
+  const nNos = nodesVis.length;
+
   if (estado.cy) { estado.cy.destroy(); estado.cy = null; }
   fecharCards();
   const cy = estado.cy = cytoscape({
@@ -1073,12 +1199,20 @@ async function atualizarGrafo(animar) {
       { selector: 'node', style: {
         'background-color': '#463822', 'border-width': 1.5, 'border-color': '#6E5F49',
         'width': ele => 34 + Math.min(26, ele.data('grau') * 6), 'height': ele => 34 + Math.min(26, ele.data('grau') * 6),
-        'label': 'data(label)', 'color': '#CFC3B0', 'font-size': 11.5, 'font-family': 'Nunito, sans-serif', 'font-weight': 600,
-        'text-valign': 'bottom', 'text-margin-y': 8, 'transition-property': 'opacity', 'transition-duration': '0.2s' } },
+        'label': ele => (denso && !ele.data('raiz')) ? '' : ele.data('label'),
+        'color': '#CFC3B0', 'font-size': 11.5, 'font-family': 'Nunito, sans-serif', 'font-weight': 600,
+        'text-valign': 'bottom', 'text-margin-y': 8,
+        'text-background-color': '#0E0B07', 'text-background-opacity': 0.72,
+        'text-background-padding': 3, 'text-background-shape': 'roundrectangle',
+        'text-max-width': 130, 'text-wrap': 'ellipsis',
+        'transition-property': 'opacity', 'transition-duration': '0.2s' } },
       { selector: 'node[foto]', style: { 'background-image': 'data(foto)', 'background-fit': 'cover' } },
+      { selector: 'node[naoConf = 1]', style: { 'border-style': 'dashed', 'border-color': '#6E5F49' } },
       { selector: 'node[raiz = 1]', style: {
         'width': 72, 'height': 72, 'border-width': 3.5, 'border-color': '#F5921E',
         'color': '#F5EFE6', 'font-weight': 800, 'font-size': 13 } },
+      { selector: 'node.rotular', style: {
+        'label': 'data(label)', 'z-index': 40, 'text-background-opacity': 0.95 } },
       { selector: 'edge', style: {
         'width': ele => 1.5 + Math.min(6, ele.data('peso') * 1.4),
         'line-color': ele => COR_ARESTA[ele.data('tipo')] || '#8A7A64',
@@ -1087,48 +1221,97 @@ async function atualizarGrafo(animar) {
         'curve-style': 'bezier', 'control-point-step-size': 42,
         'transition-property': 'opacity, width', 'transition-duration': '0.2s' } },
       { selector: 'edge[soLista = 1]', style: { 'line-color': '#5E5240' } },
+      { selector: 'edge[tipo = "manual"]', style: {
+        'line-style': 'dashed', 'line-dash-pattern': [10, 4], 'width': 3,
+        'opacity': 1, 'line-color': '#3FBFB0' } },
       { selector: '.dim', style: { 'opacity': 0.12 } },
       { selector: 'edge.hl', style: { 'opacity': 1, 'width': ele => 3 + Math.min(6, ele.data('peso') * 1.4) } },
+      { selector: 'edge[rotulo]', style: {
+        'label': ele => denso ? '' : ele.data('rotulo'), 'font-size': 10.5, 'font-weight': 700, 'color': '#FFB25C',
+        'text-background-color': '#0E0B07', 'text-background-opacity': 0.9,
+        'text-background-padding': 3, 'text-rotation': 'autorotate' } },
+      { selector: 'edge[tipo = "manual"][rotulo]', style: { 'color': '#7FD6CB' } },
+      { selector: 'edge.rotular[rotulo]', style: { 'label': 'data(rotulo)', 'z-index': 41 } },
       { selector: 'node:selected', style: { 'border-color': '#FFB25C', 'border-width': 4 } }
     ],
-    layout: { name: 'cose', animate: animar ? 'end' : false, animationDuration: 700, padding: 70, nodeRepulsion: 12000 },
+    // Com disposição salva, respeita as posições do analista (preset). Sem ela,
+    // arranjo orgânico cujos parâmetros crescem com o tamanho da rede.
+    layout: temLayout
+      ? { name: 'preset', padding: 60,
+          positions: no => posSalvas[no.data('pid')] || posicaoDeReserva(no.data('pid')) }
+      : { name: 'cose', animate: animar ? 'end' : false, animationDuration: 700, padding: 60,
+          nodeRepulsion: 9000 + nNos * 1200, idealEdgeLength: 95 + nNos * 2.4,
+          edgeElasticity: 120, nodeOverlap: 28, gravity: 0.5,
+          componentSpacing: 170, numIter: 1400 },
     wheelSensitivity: 0.2
   });
   // hover: destaca vizinhança
+  // Com a rede densa, os nomes só aparecem no que está em foco — ou quando o
+  // usuário aproxima o suficiente para caberem sem se sobrepor.
+  const aplicarRotulos = () => {
+    if (!denso || cy.zoom() > 1.25) cy.nodes().addClass('rotular');
+    else cy.nodes().removeClass('rotular');
+  };
+  cy.on('zoom', aplicarRotulos);
+  aplicarRotulos();
+
   cy.on('mouseover', 'node', ev => {
     const n = ev.target, viz = n.closedNeighborhood();
     cy.elements().not(viz).addClass('dim');
     viz.edges().addClass('hl');
+    viz.addClass('rotular');
   });
-  cy.on('mouseout', 'node', () => { cy.elements().removeClass('dim hl'); });
+  cy.on('mouseout', 'node', () => {
+    cy.elements().removeClass('dim hl rotular');
+    aplicarRotulos();
+  });
+  // Arrastou e soltou um nó: guarda a disposição para a equipe reencontrar.
+  cy.on('dragfree', 'node', () => agendarSalvarLayout());
+
+  cy.on('mouseover', 'edge', ev => ev.target.addClass('rotular'));
+  cy.on('mouseout', 'edge', ev => { if (denso) ev.target.removeClass('rotular'); });
   cy.on('tap', 'node', ev => { mostrarCardNo(ev.target.data()); $('card-aresta').style.display = 'none'; });
   cy.on('tap', 'edge', ev => { mostrarCardAresta(edgesVis[ev.target.data('idx')]); $('card-no').style.display = 'none'; });
   cy.on('tap', ev => { if (ev.target === cy) fecharCards(); });
 }
 function fecharCards() { $('card-no').style.display = 'none'; $('card-aresta').style.display = 'none'; }
 function mostrarCardNo(d) {
-  // Todo nó do grafo é uma pessoa no banco, mas só quem já foi pesquisado tem
-  // dossiê. Quem não tem ganha o botão "Pesquisar", que leva à busca com o
-  // nome preenchido — a identidade continua sendo confirmada pelo usuário
-  // (o nó veio de uma co-menção e pode ser homônimo de outra pessoa).
-  const temDossie = (estado.acervo || []).some(l => l.pessoa_id === d.pid && l.tem_briefing);
+  // Um nó pode ser (a) alguém já pesquisado, com identidade confirmada por um
+  // humano, ou (b) só um nome que o extrator tirou de uma matéria. A UI precisa
+  // deixar essa diferença explícita — senão o analista acha que sabe quem é.
+  const temDossie = !!d.dossie;
+  const confirmado = !!d.conf || !!d.raiz;
   const acao = d.raiz ? ''
     : temDossie
       ? `<button class="btn-solido" style="margin-top:10px;padding:6px 14px;font-size:12.5px;" onclick="abrirDossie(${d.pid})">Abrir dossiê →</button>`
-      : `<button class="btn-solido" style="margin-top:10px;padding:6px 14px;font-size:12.5px;" onclick="pesquisarDoGrafo('${esc(d.label)}')">Pesquisar →</button>
-         <div style="font-size:11px;color:var(--tx5);margin-top:6px;">ainda sem dossiê · confirme a pessoa nas sugestões</div>`;
+      : `<button class="btn-solido" style="margin-top:10px;padding:6px 14px;font-size:12.5px;" onclick="pesquisarDoGrafo('${esc(d.label)}', '${esc(d.ctx || '')}')">Pesquisar →</button>`;
   $('card-no').style.display = 'block';
   $('card-no').innerHTML = `
-    <div style="font-size:15px;font-weight:800;">${esc(d.label)}</div>
-    <div style="font-size:12.5px;color:var(--tx4);margin-top:2px;">${esc(d.cargo || 'cargo não informado')}</div>
+    <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+      <span style="font-size:15px;font-weight:800;">${esc(d.label)}</span>
+      ${confirmado ? '' : '<span class="badge-naoconf" title="Este nó é um nome extraído de uma matéria. Ninguém confirmou de qual pessoa se trata.">identidade não confirmada</span>'}
+    </div>
+    <div style="font-size:12.5px;color:var(--tx4);margin-top:3px;">${esc(d.cargo || d.ctx || 'sem identificação nas fontes')}</div>
+    ${(!confirmado && d.ctx) ? `<div style="font-size:11.5px;color:var(--tx5);margin-top:5px;">citado na imprensa como: <em>${esc(d.ctx)}</em></div>` : ''}
     ${acao}
+    ${!d.raiz ? `<div style="margin-top:8px;padding-top:8px;border-top:1px solid var(--bd1);">
+      <span onclick="abrirFusao(${d.pid}, '${esc(d.label)}')" style="font-size:11.5px;color:var(--ac);cursor:pointer;" title="Use quando este nó é uma pessoa que já está no acervo com outro nome">↔ esta pessoa já está no acervo com outro nome</span>
+    </div>` : ''}
+    ${(!confirmado && !d.raiz) ? '<div style="font-size:11px;color:var(--tx5);margin-top:6px;">a pesquisa vai pedir que você confirme qual pessoa é</div>' : ''}
     ${d.raiz ? '<div style="font-size:11px;color:var(--ac);font-weight:800;letter-spacing:0.08em;text-transform:uppercase;margin-top:8px;">● Raiz do grafo</div>' : ''}`;
 }
 
 /* Salta de um nó do grafo para uma nova pesquisa: sai do dossiê atual e já
    abre o painel de sugestões com o nome preenchido. */
-function pesquisarDoGrafo(nome) {
+function pesquisarDoGrafo(nome, contexto) {
   if ($('grafo-shell').classList.contains('fullscreen')) alternarFullscreen();
+  // Guarda de onde viemos: o descritor da matéria entra na busca do LinkedIn
+  // e o painel mostra o contexto para o analista comparar com os headlines.
+  estado.origemGrafo = {
+    nome,
+    contexto: contexto || '',
+    deQuem: estado.perfil ? estado.perfil.pessoa.nome : null
+  };
   fecharCards();
   voltarBusca();              // limpa timers, destrói o cy e volta à tela de busca
   trocarAba('pesquisa');
@@ -1143,6 +1326,8 @@ function mostrarCardAresta(e) {
   if (formal && e.evidencias && e.evidencias[0]) {
     const ev = e.evidencias[0];
     historia = `${e.tipo === 'co_board' ? 'Conselho em comum' : 'Ex-colegas'} na <strong>${esc(ev.empresa)}</strong>: ${esc(ev.funcao_a)} / ${esc(ev.funcao_b)}`;
+  } else if (e.tipo === 'manual') {
+    historia = `Registrada pelo analista${e.rotulo ? `: <strong>${esc(e.rotulo)}</strong>` : ''}`;
   } else if (e.tipo === 'co_mencionado') {
     historia = `Co-mencionados em <strong>${e.evidencias.length}</strong> ${e.evidencias.length === 1 ? 'matéria' : 'matérias'}`;
   } else { historia = NOME_TIPO[e.tipo] || e.tipo; }
@@ -1150,13 +1335,17 @@ function mostrarCardAresta(e) {
     <div class="evid-item">
       <div style="display:flex;align-items:center;gap:8px;">
         <a href="${esc(ev.mencao_url)}" target="_blank" rel="noopener" style="font-size:13px;font-weight:600;line-height:1.4;flex:1;">${esc(ev.titulo)}</a>
+        ${ev.data ? `<span style="font-size:11px;color:var(--tx5);flex-shrink:0;white-space:nowrap;">${fmtData(ev.data)}</span>` : ''}
         <span class="${ev.contexto === 'lista' ? 'tag-lista' : 'tag-direta'}">${ev.contexto === 'lista' ? 'lista/ranking' : 'direta'}</span>
       </div>
       ${ev.contexto === 'lista' ? '<div style="font-size:11.5px;color:var(--tx5);">citados juntos num ranking — não indica relação genuína</div>' : ''}
     </div>` : `
     <div class="evid-item">
-      <div style="font-size:13px;color:var(--tx2);"><strong>${esc(ev.empresa)}</strong> — ${esc(ev.funcao_a)} / ${esc(ev.funcao_b)}</div>
-      <div style="font-size:11.5px;color:var(--tx5);">períodos sobrepostos no LinkedIn</div>
+      ${ev.fonte === 'analista'
+        ? `<div style="font-size:13px;color:var(--tx2);line-height:1.5;">${esc(ev.justificativa || '')}</div>
+           <div style="font-size:11.5px;color:var(--tx5);">registrado pelo analista${ev.registrado_em ? ' em ' + fmtData(ev.registrado_em) : ''} — não é fonte pública</div>`
+        : `<div style="font-size:13px;color:var(--tx2);"><strong>${esc(ev.empresa || '')}</strong> — ${esc(ev.funcao_a || '')} / ${esc(ev.funcao_b || '')}</div>
+           <div style="font-size:11.5px;color:var(--tx5);">períodos sobrepostos no LinkedIn</div>`}
     </div>`).join('');
   $('card-aresta').style.display = 'block';
   $('card-aresta').innerHTML = `
@@ -1169,9 +1358,297 @@ function mostrarCardAresta(e) {
       <span onclick="fecharCards()" style="cursor:pointer;color:var(--tx5);font-size:18px;line-height:1;">×</span>
     </div>
     <div style="font-size:10.5px;font-weight:800;letter-spacing:0.1em;text-transform:uppercase;color:var(--tx5);margin:14px 0 4px;">Evidências (${(e.evidencias||[]).length})</div>
-    ${evid}`;
+    ${evid}
+    <div style="border-top:1px solid var(--bd2);margin-top:12px;padding-top:10px;">
+      <div style="font-size:10.5px;font-weight:800;letter-spacing:0.1em;text-transform:uppercase;color:var(--tx5);margin-bottom:7px;">Anotação do analista</div>
+      <div style="display:flex;gap:6px;margin-bottom:6px;">
+        <input id="anot-rotulo" class="anot-input" style="flex:1;" maxlength="80" placeholder="vínculo (ex.: filho, sócio, mentor)" value="${esc(e.rotulo || '')}">
+        <button class="btn-solido" style="padding:6px 16px;font-size:12.5px;" onclick="salvarAnotacao(${e.id})">Salvar</button>
+      </div>
+      <textarea id="anot-nota" class="anot-input" rows="2" style="width:100%;box-sizing:border-box;resize:vertical;" placeholder="observação (opcional) — ex.: citados juntos em 2 matérias sobre a sucessão">${esc(e.nota || '')}</textarea>
+      <div id="anot-status" style="font-size:11px;color:var(--tx5);margin-top:6px;">${e.anotado_em ? 'anotado em ' + fmtData(e.anotado_em) : 'a anotação fica salva e sobrevive a novas coletas'}</div>
+      <div style="margin-top:10px;padding-top:8px;border-top:1px solid var(--bd1);">
+        <span onclick="ocultarRelacao(${e.id})" style="font-size:11.5px;color:var(--neg);cursor:pointer;" title="Some do grafo. Use quando a conexão não é real — ex.: matéria que a pessoa assinou, homônimo, coincidência.">✕ marcar conexão como incorreta</span>
+      </div>
+    </div>`;
+}
+
+/* ═══ CONEXÃO MANUAL ═══
+   O grafo deixa de ser só o que a imprensa mostrou e passa a acumular o que a
+   casa sabe. Para não misturar as duas coisas, a conexão manual tem traço
+   próprio e exige justificativa — é a evidência possível quando a fonte é o
+   conhecimento do analista. */
+let conexaoAlvo = null;
+
+async function abrirConexaoManual() {
+  if (!estado.perfil) return;
+  conexaoAlvo = { id: estado.perfil.pessoa.id, nome: estado.perfil.pessoa.nome };
+  await carregarAcervo();
+  renderConexaoManual('');
+}
+
+function renderConexaoManual(filtro) {
+  const f = (filtro || '').toLowerCase();
+  const candidatos = (estado.acervo || [])
+    .filter(p => p.pessoa_id !== conexaoAlvo.id)
+    .filter(p => p.tem_briefing || p.identidade_confirmada)
+    .filter(p => !f || p.nome.toLowerCase().includes(f) || (p.cargo_atual || '').toLowerCase().includes(f));
+  const itens = candidatos.length ? candidatos.map(p => `
+    <div class="sug-item" onclick="selecionarParaConexao(${p.pessoa_id}, '${esc(p.nome)}')">
+      <div class="sug-avatar">${p.foto_url ? `<img src="${esc(p.foto_url)}" onerror="this.remove()" alt="">` : ''}<span style="position:absolute;">${p.foto_url ? '' : iniciais(p.nome)}</span></div>
+      <div style="min-width:0;"><div class="sug-nome">${esc(p.nome)}</div><div class="sug-sub">${esc(p.cargo_atual || 'sem cargo registrado')}</div></div>
+    </div>`).join('')
+    : '<div style="padding:20px;font-size:13px;color:var(--tx4);">Nenhuma pessoa pesquisada corresponde. Só é possível conectar quem já tem dossiê.</div>';
+
+  $('modal-fusao').innerHTML = `
+    <div class="modal-fundo" onclick="if(event.target===this)fecharConexao()">
+      <div class="modal-cx">
+        <div class="modal-cab">
+          <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;">
+            <div>
+              <div style="font-size:16px;font-weight:800;">Conectar <span style="color:var(--ac);">${esc(conexaoAlvo.nome)}</span> a quem?</div>
+              <div style="font-size:12.5px;color:var(--tx4);margin-top:4px;line-height:1.5;">Para vínculos que você conhece e a imprensa não mostrou. A conexão aparece no grafo com traço próprio, identificada como conhecimento da casa.</div>
+            </div>
+            <span onclick="fecharConexao()" style="cursor:pointer;color:var(--tx5);font-size:20px;line-height:1;">×</span>
+          </div>
+          <input class="anot-input" style="width:100%;box-sizing:border-box;margin-top:12px;" placeholder="filtrar por nome ou cargo…" oninput="renderConexaoManual(this.value)" autofocus>
+        </div>
+        <div class="modal-lista">${itens}</div>
+      </div>
+    </div>`;
+  $('modal-fusao').style.display = 'block';
+}
+
+function selecionarParaConexao(outroId, outroNome) {
+  $('modal-fusao').innerHTML = `
+    <div class="modal-fundo" onclick="if(event.target===this)fecharConexao()">
+      <div class="modal-cx">
+        <div class="modal-cab">
+          <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;">
+            <div style="font-size:16px;font-weight:800;">${esc(conexaoAlvo.nome)} <span style="color:var(--ac);">↔</span> ${esc(outroNome)}</div>
+            <span onclick="fecharConexao()" style="cursor:pointer;color:var(--tx5);font-size:20px;line-height:1;">×</span>
+          </div>
+        </div>
+        <div style="padding:16px 22px 20px;display:flex;flex-direction:column;gap:12px;">
+          <div>
+            <div style="font-size:11px;font-weight:800;letter-spacing:0.1em;text-transform:uppercase;color:var(--tx5);margin-bottom:5px;">Natureza do vínculo</div>
+            <input id="cm-rotulo" class="anot-input" style="width:100%;box-sizing:border-box;" maxlength="80" placeholder="ex.: sócios, conselho da X, amigos de longa data" autofocus>
+          </div>
+          <div>
+            <div style="font-size:11px;font-weight:800;letter-spacing:0.1em;text-transform:uppercase;color:var(--tx5);margin-bottom:5px;">Justificativa <span style="color:var(--ac);">*</span></div>
+            <textarea id="cm-nota" class="anot-input" rows="3" style="width:100%;box-sizing:border-box;resize:vertical;" placeholder="Como você sabe disso? Ex.: 'fundaram a gestora juntos em 2015, informação do cliente'"></textarea>
+            <div style="font-size:11px;color:var(--tx5);margin-top:5px;">Obrigatória — sem fonte pública, o registro do porquê é o que torna a conexão auditável.</div>
+          </div>
+          <div id="cm-erro" style="font-size:12px;color:var(--neg);display:none;"></div>
+          <div style="display:flex;gap:8px;justify-content:flex-end;">
+            <button class="btn-ctl" onclick="fecharConexao()">Cancelar</button>
+            <button class="btn-solido" style="padding:8px 20px;font-size:13px;" onclick="salvarConexaoManual(${outroId}, '${esc(outroNome)}')">Registrar conexão</button>
+          </div>
+        </div>
+      </div>
+    </div>`;
+}
+
+async function salvarConexaoManual(outroId, outroNome) {
+  const rotulo = $('cm-rotulo').value.trim();
+  const nota = $('cm-nota').value.trim();
+  const erro = $('cm-erro');
+  if (rotulo.length < 2 || nota.length < 3) {
+    erro.textContent = 'Preencha a natureza do vínculo e a justificativa.';
+    erro.style.display = 'block';
+    return;
+  }
+  try {
+    await fetchJSON(`${API_BASE}/grafo/relacao`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        pessoa_a_id: conexaoAlvo.id, pessoa_b_id: outroId, rotulo, nota
+      })
+    });
+    fecharConexao();
+    await atualizarGrafo(true);
+  } catch (e) {
+    erro.textContent = e.message;
+    erro.style.display = 'block';
+  }
+}
+
+function fecharConexao() { $('modal-fusao').style.display = 'none'; $('modal-fusao').innerHTML = ''; conexaoAlvo = null; }
+
+/* ═══ FUSÃO DE ENTIDADES ═══
+   Nenhum algoritmo liga "Dani Braun" a "Daniela Braun" com segurança — o
+   analista liga em dois segundos. Aqui ele aponta a equivalência e as duas
+   redes viram uma só. */
+let fusaoNo = null;
+
+async function abrirFusao(pessoaId, nome) {
+  fusaoNo = { id: pessoaId, nome };
+  await carregarAcervo();
+  renderFusao('');
+}
+
+function renderFusao(filtro) {
+  const f = (filtro || '').toLowerCase();
+  const candidatos = (estado.acervo || [])
+    .filter(p => p.pessoa_id !== fusaoNo.id)
+    .filter(p => !f || p.nome.toLowerCase().includes(f) || (p.cargo_atual || '').toLowerCase().includes(f));
+  const itens = candidatos.length ? candidatos.map(p => `
+    <div class="sug-item" onclick="confirmarFusao(${p.pessoa_id}, '${esc(p.nome)}')">
+      <div class="sug-avatar">${p.foto_url ? `<img src="${esc(p.foto_url)}" onerror="this.remove()" alt="">` : ''}<span style="position:absolute;">${p.foto_url ? '' : iniciais(p.nome)}</span></div>
+      <div style="min-width:0;"><div class="sug-nome">${esc(p.nome)}</div><div class="sug-sub">${esc(p.cargo_atual || 'sem cargo registrado')}</div></div>
+      ${p.tem_briefing ? '<span class="badge-pronto">dossiê pronto</span>' : ''}
+    </div>`).join('')
+    : '<div style="padding:20px;font-size:13px;color:var(--tx4);">Nenhuma pessoa no acervo corresponde à busca.</div>';
+
+  $('modal-fusao').innerHTML = `
+    <div class="modal-fundo" onclick="if(event.target===this)fecharFusao()">
+      <div class="modal-cx">
+        <div class="modal-cab">
+          <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;">
+            <div>
+              <div style="font-size:16px;font-weight:800;">Quem é <span style="color:var(--ac);">${esc(fusaoNo.nome)}</span>?</div>
+              <div style="font-size:12.5px;color:var(--tx4);margin-top:4px;line-height:1.5;">Escolha a pessoa do acervo que é a mesma pessoa física. As duas fichas viram uma só e as redes se juntam.</div>
+            </div>
+            <span onclick="fecharFusao()" style="cursor:pointer;color:var(--tx5);font-size:20px;line-height:1;">×</span>
+          </div>
+          <input class="anot-input" style="width:100%;box-sizing:border-box;margin-top:12px;" placeholder="filtrar por nome ou cargo…" oninput="renderFusao(this.value)" autofocus>
+        </div>
+        <div class="modal-lista">${itens}</div>
+      </div>
+    </div>`;
+  $('modal-fusao').style.display = 'block';
+}
+
+function fecharFusao() { $('modal-fusao').style.display = 'none'; $('modal-fusao').innerHTML = ''; fusaoNo = null; }
+
+async function confirmarFusao(principalId, principalNome) {
+  const msg = `Confirmar que "${fusaoNo.nome}" é a mesma pessoa que "${principalNome}"?\n\nAs menções, conexões e cargos dos dois registros serão unidos em "${principalNome}". O nome "${fusaoNo.nome}" fica salvo como apelido, para as próximas coletas reconhecerem.`;
+  if (!window.confirm(msg)) return;
+  const duplicadaId = fusaoNo.id;
+  try {
+    const r = await fetchJSON(`${API_BASE}/perfil/${principalId}/fundir`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ duplicada_id: duplicadaId })
+    });
+    fecharFusao();
+    fecharCards();
+    await carregarAcervo();
+    // Se o nó fundido era o dossiê aberto, recarrega; senão só redesenha a rede.
+    if (estado.perfil && estado.perfil.pessoa.id === duplicadaId) {
+      await abrirDossie(principalId);
+    } else {
+      await atualizarGrafo(true);
+    }
+    alert(`"${r.absorvida}" foi unida a "${r.principal}": ${r.mencoes} menções e ${r.relacoes} conexões transferidas.`);
+  } catch (e) {
+    alert('Não foi possível unir: ' + e.message);
+  }
+}
+
+async function excluirPessoa(pessoaId, nome) {
+  const msg = `Excluir "${nome}" do acervo?\n\nIsso remove o dossiê, o briefing, as menções coletadas e as conexões dessa pessoa no grafo. A ação não pode ser desfeita — mas você pode pesquisar a pessoa de novo depois.`;
+  if (!window.confirm(msg)) return;
+  try {
+    const r = await fetchJSON(`${API_BASE}/perfil/${pessoaId}`, { method: 'DELETE' });
+    await carregarAcervo();
+    if ($('painel-acervo').classList.contains('on')) renderAcervo();
+    renderHistoricoPg();
+    const extra = (r.orfaos_removidos || []).length
+      ? ` e ${r.orfaos_removidos.length} nó(s) sem outros vínculos`
+      : '';
+    alert(`"${r.nome}" foi removido: ${r.mencoes} menções, ${r.relacoes} conexões${extra}.`);
+    return true;
+  } catch (e) {
+    alert('Não foi possível excluir: ' + e.message);
+    return false;
+  }
+}
+
+async function excluirDossieAtual() {
+  if (!estado.perfil) return;
+  const p = estado.perfil.pessoa;
+  const ok = await excluirPessoa(p.id, p.nome);
+  if (ok) voltarBusca();
+}
+
+async function ocultarRelacao(relacaoId) {
+  const st = $('anot-status');
+  st.textContent = 'removendo…'; st.style.color = 'var(--tx5)';
+  try {
+    await fetchJSON(`${API_BASE}/grafo/relacao/${relacaoId}`, {
+      method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ oculta: true })
+    });
+    fecharCards();
+    atualizarGrafo(false);   // a aresta some da rede
+  } catch (err) {
+    st.textContent = 'não foi possível remover: ' + err.message;
+    st.style.color = 'var(--neg)';
+  }
+}
+
+async function salvarAnotacao(relacaoId) {
+  const rotulo = $('anot-rotulo').value.trim();
+  const nota = $('anot-nota').value.trim();
+  const st = $('anot-status');
+  st.textContent = 'salvando…'; st.style.color = 'var(--tx5)';
+  try {
+    const r = await fetchJSON(`${API_BASE}/grafo/relacao/${relacaoId}`, {
+      method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ rotulo, nota })
+    });
+    const alvo = (estado.grafoDados.edges || []).find(x => x.id === relacaoId);
+    if (alvo) { alvo.rotulo = r.rotulo; alvo.nota = r.nota; alvo.anotado_em = r.anotado_em; }
+    // atualiza o rótulo na aresta sem redesenhar o grafo (não fecha o card)
+    if (estado.cy) estado.cy.edges().forEach(el => {
+      if (el.data('rid') === relacaoId) el.data('rotulo', r.rotulo || undefined);
+    });
+    st.textContent = r.anotado_em ? 'salvo ✓' : 'anotação removida';
+    st.style.color = r.anotado_em ? 'var(--pos)' : 'var(--tx5)';
+  } catch (err) {
+    st.textContent = 'não foi possível salvar: ' + err.message;
+    st.style.color = 'var(--neg)';
+  }
 }
 function alternarFiltroLista() { estado.ocultarLista = !estado.ocultarLista; $('tgl-lista').classList.toggle('on', estado.ocultarLista); atualizarGrafo(false); }
+let timerLayout = null;
+function agendarSalvarLayout() {
+  clearTimeout(timerLayout);
+  timerLayout = setTimeout(salvarLayoutGrafo, 900);   // espera o analista parar de arrastar
+}
+
+async function salvarLayoutGrafo() {
+  if (!estado.cy || !estado.perfil) return;
+  const posicoes = {};
+  estado.cy.nodes().forEach(no => {
+    const p = no.position();
+    posicoes[no.data('pid')] = { x: Math.round(p.x), y: Math.round(p.y) };
+  });
+  estado.layoutSalvo = posicoes;
+  const aviso = $('grafo-layout-aviso');
+  try {
+    await fetchJSON(`${API_BASE}/grafo/${estado.perfil.pessoa.id}/layout`, {
+      method: 'PUT', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ posicoes })
+    });
+    if (aviso) {
+      aviso.textContent = 'disposição salva';
+      aviso.style.opacity = '1';
+      setTimeout(() => { aviso.style.opacity = '0'; }, 1800);
+    }
+  } catch (e) { /* silencioso: a disposição é conveniência, não dado crítico */ }
+}
+
+async function reorganizarGrafo() {
+  estado.layoutSalvo = null;
+  try {
+    await fetchJSON(`${API_BASE}/grafo/${estado.perfil.pessoa.id}/layout`, {
+      method: 'PUT', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ posicoes: {} })
+    });
+  } catch (e) { /* recalcula na tela mesmo se não conseguir limpar no servidor */ }
+  atualizarGrafo(true);
+}
 function recentrarGrafo() { if (estado.cy) estado.cy.animate({ fit: { padding: 70 }, duration: 400 }); }
 function alternarFullscreen() {
   const sh = $('grafo-shell');
@@ -1197,7 +1674,7 @@ document.addEventListener('keydown', e => { if (e.key === 'Escape' && $('grafo-s
 
 /* ═══════════════ BOOT ═══════════════ */
 carregarAcervo().then(() => {
-  $('cont-acervo').textContent = estado.acervo.length;
+  $('cont-acervo').textContent = estado.acervoTotal;
   renderHistorico();
 });
 </script>

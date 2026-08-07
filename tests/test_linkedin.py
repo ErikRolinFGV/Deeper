@@ -269,7 +269,7 @@ def preparar(monkeypatch):
     monkeypatch.setattr(busca_worker, "buscar_mencoes", lambda nome, limite=15: [])
     monkeypatch.setattr(busca_worker, "extrair", lambda texto, ctx: None)
     monkeypatch.setattr(busca_worker, "sintetizar", lambda dados: "Briefing LinkedIn.")
-    monkeypatch.setattr(busca_worker, "baixar_texto", lambda url: None)
+    monkeypatch.setattr(busca_worker, "baixar_artigo", lambda url: None)
     yield
     Base.metadata.drop_all(engine)
 

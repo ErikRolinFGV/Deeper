@@ -11,8 +11,67 @@ from app.models.cargo import Cargo
 from app.models.evento import Evento, evento_participante
 from app.models.mencao import Mencao
 from app.models.pessoa import Pessoa
+from pydantic import BaseModel, Field
+
+from app.services.manutencao import excluir_pessoa, fundir_pessoas
+
+
+class FusaoRequest(BaseModel):
+    """Diz que a pessoa `duplicada_id` é, na verdade, a pessoa da rota."""
+
+    duplicada_id: int = Field(..., description="ID do registro a ser absorvido")
 
 router = APIRouter(prefix="/perfil", tags=["perfil"])
+
+# Tamanho do trecho exibido na interface. Deliberadamente curto: é citação
+# para contexto e verificação, não substituto da matéria (ver nota no README
+# sobre direitos autorais e paywall).
+TRECHO_CHARS = 600
+
+
+@router.post("/{pessoa_id}/fundir")
+def fundir_perfil(
+    pessoa_id: int, req: FusaoRequest, db: Session = Depends(get_db)
+) -> dict:
+    """Funde dois registros que são a mesma pessoa física.
+
+    Caso típico: a imprensa cita "Dani Braun" e o LinkedIn diz "Daniela
+    Braun". O analista aponta a equivalência e as duas redes viram uma só.
+    """
+    principal = db.get(Pessoa, pessoa_id)
+    duplicada = db.get(Pessoa, req.duplicada_id)
+    if principal is None or duplicada is None:
+        raise HTTPException(status_code=404, detail="Pessoa não encontrada")
+    if principal.id == duplicada.id:
+        raise HTTPException(
+            status_code=400, detail="Selecione duas pessoas diferentes."
+        )
+
+    resumo = fundir_pessoas(db, principal, duplicada)
+    db.commit()
+    return {"fundido": True, "pessoa_id": principal.id, **resumo}
+
+
+@router.delete("/{pessoa_id}")
+def excluir_perfil(
+    pessoa_id: int,
+    limpar_orfaos: bool = Query(
+        True, description="Também remove nós que só existiam por causa desta pessoa"
+    ),
+    db: Session = Depends(get_db),
+) -> dict:
+    """Remove o dossiê e todos os dados coletados desta pessoa.
+
+    Útil quando o registro nasceu de um erro de grafia, de um homônimo ou de
+    um perfil do LinkedIn desativado. Ação definitiva.
+    """
+    pessoa = db.get(Pessoa, pessoa_id)
+    if pessoa is None:
+        raise HTTPException(status_code=404, detail="Pessoa não encontrada")
+
+    resumo = excluir_pessoa(db, pessoa, limpar_orfaos=limpar_orfaos)
+    db.commit()
+    return {"removido": True, **resumo}
 
 
 @router.get("/{pessoa_id}")
@@ -78,6 +137,13 @@ def obter_perfil(
                 "data_publicacao": m.data_publicacao.isoformat() if m.data_publicacao else None,
                 "sentimento": m.sentimento,
                 "temas": m.temas.split(",") if m.temas else [],
+                # Trecho do que foi coletado da matéria — contexto suficiente
+                # para o analista julgar sem sair da ferramenta. A leitura
+                # integral continua sendo no site do veículo (link acima).
+                "trecho": (m.texto or "")[:TRECHO_CHARS].strip() or None,
+                "trecho_truncado": len(m.texto or "") > TRECHO_CHARS,
+                # "autor" = matéria assinada pela pessoa (ela era o repórter)
+                "papel": m.papel,
             }
             for m in mencoes
         ],

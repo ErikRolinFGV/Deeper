@@ -33,22 +33,9 @@ def _resetar_dossie(db: Session, pessoa: Pessoa) -> None:
     o mesmo (homônimo), mas a pessoa física é outra — menções, cargos,
     relações e briefing antigos contaminariam o novo dossiê.
     """
-    from app.models.cargo import Cargo
-    from app.models.evento import evento_participante
-    from app.models.mencao import Mencao
-    from app.models.relacao import Relacao
-    from sqlalchemy import delete, or_
+    from app.services.manutencao import limpar_dados_derivados
 
-    db.execute(delete(Cargo).where(Cargo.pessoa_id == pessoa.id))
-    db.execute(delete(Mencao).where(Mencao.pessoa_id == pessoa.id))
-    db.execute(
-        delete(Relacao).where(
-            or_(Relacao.pessoa_a_id == pessoa.id, Relacao.pessoa_b_id == pessoa.id)
-        )
-    )
-    db.execute(
-        evento_participante.delete().where(evento_participante.c.pessoa_id == pessoa.id)
-    )
+    limpar_dados_derivados(db, pessoa)
     pessoa.nome_completo = None
     pessoa.cargo_atual = None
     pessoa.bio = None
@@ -75,8 +62,12 @@ def criar_busca(req: BuscaRequest, db: Session = Depends(get_db)) -> BuscaRespon
     3. Caso contrário, cria JobColeta e enfileira no Redis (RQ).
     4. Retorna job_id para o cliente fazer polling em GET /job/{id}.
     """
+    from app.services.manutencao import localizar_por_slug
+
     slug = gerar_slug(req.nome)
-    pessoa = db.scalar(select(Pessoa).where(Pessoa.slug == slug))
+    # Respeita apelidos criados por fusão: buscar "Dani Braun" abre o dossiê
+    # da "Daniela Braun" em vez de criar um registro paralelo.
+    pessoa = localizar_por_slug(db, slug)
 
     # Busca livre desabilitada para pessoas novas: sem identidade confirmada,
     # "CEO do Nubank" acha um diretor qualquer e o dossiê nasce errado.
@@ -97,17 +88,30 @@ def criar_busca(req: BuscaRequest, db: Session = Depends(get_db)) -> BuscaRespon
     pular_cache = False
     if req.linkedin_url:
         if pessoa is None:
-            pessoa = Pessoa(slug=slug, nome=req.nome.strip(), linkedin_url=req.linkedin_url)
+            pessoa = Pessoa(
+                slug=slug, nome=req.nome.strip(), linkedin_url=req.linkedin_url,
+                identidade_confirmada=True,
+            )
             db.add(pessoa)
             db.flush()
             pular_cache = True
         elif pessoa.linkedin_url != req.linkedin_url:
-            # Perfil trocado = OUTRA pessoa física com o mesmo nome (homônimo).
-            # Tudo que foi coletado pertence à identidade antiga — zera o
-            # dossiê para recomeçar limpo com a identidade escolhida.
-            _resetar_dossie(db, pessoa)
+            # Duas situações MUITO diferentes chegam aqui:
+            #
+            # 1. A pessoa já tinha um perfil confirmado e agora veio outro:
+            #    é homônimo — outra pessoa física. Zera o dossiê (caso Renato
+            #    Costa: CIO da Odontoprev vs. CEO da Friboi).
+            # 2. A pessoa era só um nó do grafo, criado a partir de uma
+            #    co-menção, e nunca teve perfil: confirmar quem ela é
+            #    ENRIQUECE o registro. Apagar aqui destruiria justamente a
+            #    conexão que levou o analista a pesquisá-la.
+            if pessoa.linkedin_url:
+                _resetar_dossie(db, pessoa)
             pessoa.linkedin_url = req.linkedin_url
+            pessoa.identidade_confirmada = True
             pular_cache = True
+        elif not pessoa.identidade_confirmada:
+            pessoa.identidade_confirmada = True
         db.commit()
 
     # --- Cache hit: perfil existe e está fresco ---

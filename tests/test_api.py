@@ -243,7 +243,8 @@ def test_grafo_pessoa_isolada_retorna_so_a_raiz(client, db):
     db.commit()
 
     corpo = client.get(f"/grafo/{p.id}").json()
-    assert corpo["nodes"] == [
-        {"id": p.id, "label": "Isolado", "cargo_atual": None, "foto_url": None, "raiz": True}
-    ]
+    assert len(corpo["nodes"]) == 1
+    no = corpo["nodes"][0]
+    assert no["id"] == p.id and no["label"] == "Isolado" and no["raiz"] is True
+    assert no["identidade_confirmada"] is False and no["tem_dossie"] is False
     assert corpo["edges"] == []

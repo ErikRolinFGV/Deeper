@@ -22,6 +22,11 @@ class Mencao(Base):
     sentimento: Mapped[float | None] = mapped_column(Float, nullable=True)  # -1 a +1
     temas: Mapped[str | None] = mapped_column(String(512), nullable=True)  # CSV simples
 
+    # Papel da pessoa NESTA matéria: protagonista | citado | autor.
+    # "autor" = ela assinou o texto (repórter/colunista): a matéria conta como
+    # trajetória, mas NÃO gera conexões — quem ela citou é pauta, não relação.
+    papel: Mapped[str | None] = mapped_column(String(20), nullable=True)
+
     coletado_em: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
     pessoa: Mapped["Pessoa"] = relationship(back_populates="mencoes")  # type: ignore[name-defined]  # noqa: F821

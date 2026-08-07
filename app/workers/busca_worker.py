@@ -35,7 +35,7 @@ from app.services.collectors.apify_linkedin import (
     descobrir_linkedin_url,
     normalizar_perfil,
 )
-from app.services.collectors.leitor_artigo import baixar_texto
+from app.services.collectors.leitor_artigo import baixar_artigo, eh_autor
 from app.services.collectors.serpapi_news import (
     _data_da_url,
     _eh_pagina_indice,
@@ -44,12 +44,13 @@ from app.services.collectors.serpapi_news import (
 )
 from app.services.graph.construtor import reforcar_relacao
 from app.services.graph.inferidor_formal import inferir_relacoes_formais
+from app.services.manutencao import localizar_por_slug
 from app.services.llm.extrator import extrair
 from app.services.llm.sintetizador import sintetizar
 
 # Versão do pipeline — aparece no log de cada job. Se o log mostrar uma
 # versão antiga, o processo do worker precisa ser reiniciado.
-PIPELINE_VERSAO = "2026-07-23.2"
+PIPELINE_VERSAO = "2026-07-30.1"
 
 # Limites de MVP: controlam custo de API por busca.
 MAX_MENCOES = 30          # resultados pedidos ao SerpAPI
@@ -61,14 +62,20 @@ MIN_TEXTO_COMPLETO = 500  # menção com texto menor que isso baixa o corpo da m
 # ---------- helpers de persistência ----------
 
 
-def _get_or_create_pessoa(db: Session, nome: str) -> Pessoa:
+def _get_or_create_pessoa(db: Session, nome: str, contexto: str | None = None) -> Pessoa:
+    """Localiza a pessoa pelo slug ou cria. `contexto` é o descritor da matéria
+    que originou a citação — fica guardado para identificar o nó depois."""
     slug = gerar_slug(nome)
-    pessoa = db.scalar(select(Pessoa).where(Pessoa.slug == slug))
+    # Passa por apelidos: se o analista já disse que "Dani Braun" é a
+    # "Daniela Braun", a citação cai no registro certo em vez de duplicar.
+    pessoa = localizar_por_slug(db, slug)
     if pessoa is None:
-        pessoa = Pessoa(slug=slug, nome=nome.strip())
+        pessoa = Pessoa(slug=slug, nome=nome.strip(), contexto_origem=contexto)
         db.add(pessoa)
         db.flush()
-        logger.info(f"Pessoa criada: '{nome}' (id={pessoa.id})")
+        logger.info(f"Pessoa criada: '{nome}' (id={pessoa.id})" + (f" — {contexto}" if contexto else ""))
+    elif contexto and not pessoa.contexto_origem:
+        pessoa.contexto_origem = contexto
     return pessoa
 
 
@@ -262,10 +269,16 @@ def _processar_mencao(
     # economia raramente nomeia pessoas — o corpo da matéria é onde o grafo
     # nasce. Baixa uma vez e persiste em mencao.texto (reuso sem re-download).
     if len(mencao.texto or "") < MIN_TEXTO_COMPLETO:
-        corpo = baixar_texto(mencao.url)
-        if corpo:
-            mencao.texto = corpo
-            logger.debug(f"Menção {mencao.id}: corpo baixado ({len(corpo)} chars)")
+        artigo = baixar_artigo(mencao.url)
+        if artigo:
+            mencao.texto = artigo["texto"]
+            # Assinatura confere com o alvo? Ele é o repórter, não o assunto.
+            if eh_autor(pessoa.nome, artigo.get("autor")):
+                mencao.papel = "autor"
+                logger.info(
+                    f"Menção {mencao.id}: assinada pelo alvo ({artigo['autor']}) — "
+                    "não gera conexões"
+                )
 
     texto = "\n".join(filter(None, [mencao.titulo, mencao.texto]))
     if not texto.strip():
@@ -286,6 +299,15 @@ def _processar_mencao(
         )
         db.delete(mencao)
         return
+
+    papel = getattr(entidades, "papel_pessoa_alvo", "citado")
+    if papel == "ausente":
+        logger.info(f"Menção {mencao.id} descartada: alvo não aparece no texto")
+        db.delete(mencao)
+        return
+    # A heurística de assinatura (byline) tem prioridade sobre o palpite do LLM.
+    if mencao.papel != "autor":
+        mencao.papel = papel
 
     mencao.sentimento = entidades.sentimento
     mencao.temas = ",".join(entidades.temas[:10]) if entidades.temas else None
@@ -309,6 +331,7 @@ def _processar_mencao(
         "mencao_url": mencao.url,
         "titulo": mencao.titulo,
         "contexto": "lista" if eh_lista else "direta",
+        "data": mencao.data_publicacao.isoformat() if mencao.data_publicacao else None,
     }
 
     for nome_empresa in entidades.empresas_mencionadas:
@@ -318,11 +341,21 @@ def _processar_mencao(
         evento = _get_or_create_evento(db, nome_evento, mencao.url)
         _vincular_participante(db, evento, pessoa)
 
-    for nome_pessoa in entidades.pessoas_mencionadas[:MAX_COMENCIONADOS]:
-        if gerar_slug(nome_pessoa) == pessoa.slug:
+    # Matéria ASSINADA pela pessoa-alvo não gera conexões: quem ela citou é
+    # pauta de reportagem, não relação pessoal. Sem isso, um executivo com
+    # passado de jornalista fica ligado a todo mundo sobre quem escreveu.
+    if mencao.papel == "autor":
+        logger.info(f"Menção {mencao.id}: matéria assinada — conexões ignoradas")
+        return
+
+    for citada in entidades.pessoas_mencionadas[:MAX_COMENCIONADOS]:
+        if gerar_slug(citada.nome) == pessoa.slug:
             continue  # o próprio alvo citado com variação do nome
-        co_pessoa = _get_or_create_pessoa(db, nome_pessoa)
-        reforcar_relacao(db, pessoa.id, co_pessoa.id, "co_mencionado", evidencia)
+        co_pessoa = _get_or_create_pessoa(db, citada.nome, citada.descritor)
+        # O descritor entra na evidência: é o que identifica QUAL homônimo
+        # aquela matéria citava, mesmo que o nó seja atualizado depois.
+        ev = {**evidencia, "descritor": citada.descritor} if citada.descritor else evidencia
+        reforcar_relacao(db, pessoa.id, co_pessoa.id, "co_mencionado", ev)
 
     extras["empresas"].extend(entidades.empresas_mencionadas)
     extras["valores_monetarios"].extend(entidades.valores_monetarios)
@@ -342,9 +375,14 @@ def _montar_consolidado(
     corrente — se todas já tinham sido extraídas antes, o briefing saía
     dizendo "sem menções na imprensa" com dezenas delas no banco.
     """
+    # Matérias ASSINADAS pela pessoa ficam fora do briefing: o sentimento e os
+    # temas de um texto que ela escreveu descrevem a pauta dela como repórter,
+    # não como ela é tratada pela imprensa.
     mencoes = db.scalars(
         select(Mencao).where(
-            Mencao.pessoa_id == pessoa.id, Mencao.sentimento.is_not(None)
+            Mencao.pessoa_id == pessoa.id,
+            Mencao.sentimento.is_not(None),
+            or_(Mencao.papel.is_(None), Mencao.papel != "autor"),
         )
     ).all()
     mencoes.sort(key=lambda m: m.data_publicacao or date.min, reverse=True)
