@@ -32,10 +32,15 @@ from app.models.pessoa import Pessoa
 from app.models.relacao import Relacao
 from app.services.collectors.apify_linkedin import (
     coletar_perfil_linkedin,
-    descobrir_linkedin_url,
     normalizar_perfil,
 )
 from app.services.collectors.leitor_artigo import baixar_artigo, eh_autor
+from app.services.fotos import (
+    caminho_local,
+    completar_foto_pela_imprensa,
+    foto_expirada,
+    guardar_foto,
+)
 from app.services.collectors.serpapi_news import (
     _data_da_url,
     _eh_pagina_indice,
@@ -44,17 +49,19 @@ from app.services.collectors.serpapi_news import (
 )
 from app.services.graph.construtor import reforcar_relacao
 from app.services.graph.inferidor_formal import inferir_relacoes_formais
-from app.services.manutencao import localizar_por_slug
+from app.services.collectors.apify_linkedin import _tokens_nome, nome_confere
+from app.services.manutencao import localizar_por_slug, registrar_alias
 from app.services.llm.extrator import extrair
 from app.services.llm.sintetizador import sintetizar
 
 # Versão do pipeline — aparece no log de cada job. Se o log mostrar uma
 # versão antiga, o processo do worker precisa ser reiniciado.
-PIPELINE_VERSAO = "2026-07-30.1"
+PIPELINE_VERSAO = "2026-09-28.3"
 
 # Limites de MVP: controlam custo de API por busca.
 MAX_MENCOES = 30          # resultados pedidos ao SerpAPI
-MAX_EXTRACOES = 20        # menções que passam pelo extrator LLM
+MAX_EXTRACOES = 30        # menções que passam pelo extrator LLM (cobre a coleta inteira)
+EXTRACOES_PARALELAS = 5   # chamadas simultâneas ao LLM/download de matérias
 MAX_COMENCIONADOS = 10    # pessoas co-mencionadas processadas por menção
 MIN_TEXTO_COMPLETO = 500  # menção com texto menor que isso baixa o corpo da matéria
 
@@ -77,6 +84,38 @@ def _get_or_create_pessoa(db: Session, nome: str, contexto: str | None = None) -
     elif contexto and not pessoa.contexto_origem:
         pessoa.contexto_origem = contexto
     return pessoa
+
+
+def _vizinho_equivalente(db: Session, alvo: Pessoa, nome: str) -> Pessoa | None:
+    """Mesma pessoa já ligada ao alvo com o nome escrito de outro jeito?
+
+    "Gustavo Pimenta" e "Gustavo Rodrigues Pimenta" no mesmo dossiê são a
+    mesma pessoa (primeiro nome e último sobrenome batem). Só procuramos
+    entre quem JÁ é conexão do alvo: no acervo inteiro, "João Silva" e
+    "João Pedro Silva" seriam fundidos por engano. O nome novo vira apelido,
+    para as próximas coletas caírem direto no registro certo.
+    """
+    if localizar_por_slug(db, gerar_slug(nome)) is not None:
+        return None  # já existe com esse nome exato: o caminho normal resolve
+    vizinhos = db.scalars(
+        select(Pessoa)
+        .join(Relacao, or_(Relacao.pessoa_a_id == Pessoa.id, Relacao.pessoa_b_id == Pessoa.id))
+        .where(
+            or_(Relacao.pessoa_a_id == alvo.id, Relacao.pessoa_b_id == alvo.id),
+            Pessoa.id != alvo.id,
+        )
+    ).all()
+    for v in vizinhos:
+        if nome_confere(nome, v.nome) or nome_confere(v.nome, nome):
+            registrar_alias(db, v, gerar_slug(nome), nome)
+            # Guarda a forma mais completa como nome de exibição ("Luiz Lula
+            # da Silva" -> "Luiz Inácio Lula da Silva"), salvo se o analista
+            # já confirmou a identidade (aí o nome certo é o dele).
+            if not v.identidade_confirmada and len(_tokens_nome(nome)) > len(_tokens_nome(v.nome)):
+                v.nome = nome.strip()
+            logger.info(f"'{nome}' reconhecido como '{v.nome}' (conexão já existente)")
+            return v
+    return None
 
 
 def _get_or_create_empresa(db: Session, nome: str) -> Empresa:
@@ -174,6 +213,12 @@ def _persistir_perfil_linkedin(db: Session, pessoa: Pessoa, perfil: dict) -> Non
     pessoa.foto_url = perfil.get("foto_url") or pessoa.foto_url
     pessoa.localizacao = perfil.get("localizacao") or pessoa.localizacao
 
+    # A URL da CDN do LinkedIn expira; guardamos os bytes enquanto ela vale.
+    if pessoa.id is None:
+        db.flush()
+    if pessoa.foto_url and not foto_expirada(pessoa.foto_url):
+        guardar_foto(pessoa.id, pessoa.foto_url)
+
     # Cargo atual: a experiência corrente do LinkedIn é a fonte mais
     # estruturada que temos — tem prioridade sobre menções de imprensa.
     atuais = [e for e in perfil.get("experiencias", []) if e.get("atual")]
@@ -221,16 +266,19 @@ def _persistir_perfil_linkedin(db: Session, pessoa: Pessoa, perfil: dict) -> Non
 def _atualizar_com_linkedin(db: Session, pessoa: Pessoa) -> dict | None:
     """Descobre, coleta e aplica o perfil LinkedIn da pessoa.
 
-    Fluxo: descoberta da URL via SerpAPI (1x, só se desconhecida) →
+    Fluxo: URL confirmada pelo analista (nunca descoberta automática) →
     cache TTL (payload bruto salvo em pessoa.linkedin_dados, evita pagar o
     actor de novo em force_refresh) → coleta Apify → normalização →
     persistência (ficha + cargos + empresas).
 
     Retorna o perfil normalizado (para o sintetizador) ou None.
     """
+    # Só coleta o perfil que um humano confirmou. A antiga descoberta
+    # automática (1º resultado de site:linkedin.com/in "Nome") trazia
+    # homônimos: o Rafael Miotto presidente da CNH virou um analista
+    # comercial em career break. Sem URL confirmada, o dossiê sai só da imprensa.
     if not pessoa.linkedin_url:
-        pessoa.linkedin_url = descobrir_linkedin_url(pessoa.nome, pessoa.cargo_atual)
-    if not pessoa.linkedin_url:
+        logger.info(f"Pessoa {pessoa.id}: sem LinkedIn confirmado, coleta só da imprensa")
         return None
 
     agora = datetime.now(timezone.utc)
@@ -241,10 +289,18 @@ def _atualizar_com_linkedin(db: Session, pessoa: Pessoa) -> dict | None:
         if coletado.tzinfo is None:
             coletado = coletado.replace(tzinfo=timezone.utc)
         if (agora - coletado).days < settings.LINKEDIN_TTL_DIAS:
-            logger.info(f"Pessoa {pessoa.id}: LinkedIn em cache (TTL), sem recoleta")
             perfil = normalizar_perfil(pessoa.linkedin_dados)
-            _persistir_perfil_linkedin(db, pessoa, perfil)
-            return perfil
+            # A foto da CDN vence antes do payload: reaplicar o cache aqui
+            # devolveria uma URL morta e o dossiê perderia a imagem para
+            # sempre. Nesse caso vale pagar a recoleta.
+            if foto_expirada(perfil.get("foto_url")) and not caminho_local(pessoa.id):
+                logger.info(
+                    f"Pessoa {pessoa.id}: foto do cache expirada — recoletando LinkedIn"
+                )
+            else:
+                logger.info(f"Pessoa {pessoa.id}: LinkedIn em cache (TTL), sem recoleta")
+                _persistir_perfil_linkedin(db, pessoa, perfil)
+                return perfil
 
     bruto = coletar_perfil_linkedin(pessoa.linkedin_url)
     if not bruto:
@@ -257,39 +313,91 @@ def _atualizar_com_linkedin(db: Session, pessoa: Pessoa) -> dict | None:
     return perfil
 
 
+def _preparar_mencao(
+    nome_alvo: str, contexto: str, url: str, titulo: str | None, texto: str | None
+) -> dict:
+    """Parte lenta e SEM banco: baixa a matéria (se preciso) e roda o extrator.
+
+    Roda em paralelo (threads). Não toca na Session do SQLAlchemy, que não é
+    thread-safe: recebe só valores simples e devolve um dict para `_aplicar`.
+    """
+    resultado: dict = {"texto": None, "autor": False, "entidades": None}
+    # Enriquecimento: snippet do buscador é curto (~200 chars) e manchete de
+    # economia raramente nomeia pessoas — o corpo da matéria é onde o grafo
+    # nasce. Baixa uma vez e persiste em mencao.texto (reuso sem re-download).
+    if len(texto or "") < MIN_TEXTO_COMPLETO:
+        artigo = baixar_artigo(url)
+        if artigo:
+            texto = artigo["texto"]
+            resultado["texto"] = texto
+            # Assinatura confere com o alvo? Ele é o repórter, não o assunto.
+            resultado["autor"] = eh_autor(nome_alvo, artigo.get("autor"))
+            if resultado["autor"]:
+                logger.info(f"Matéria assinada pelo alvo ({artigo['autor']}): {url[:60]}")
+
+    completo = "\n".join(filter(None, [titulo, texto]))
+    if completo.strip():
+        resultado["entidades"] = extrair(completo, contexto)
+    return resultado
+
+
+def _contexto_alvo(pessoa: Pessoa) -> str:
+    # Contexto rico (nome + cargo/empresa) permite ao extrator detectar
+    # homônimos: matéria sobre "outro" Renato Costa é descartada.
+    return f"{pessoa.nome} — {pessoa.cargo_atual}" if pessoa.cargo_atual else pessoa.nome
+
+
 def _processar_mencao(
     db: Session, pessoa: Pessoa, mencao: Mencao, extras: dict
 ) -> None:
-    """Roda o extrator LLM sobre uma menção e persiste o que ele encontrar.
+    """Versão sequencial (1 menção): prepara e aplica."""
+    preparado = _preparar_mencao(
+        pessoa.nome, _contexto_alvo(pessoa), mencao.url, mencao.titulo, mencao.texto
+    )
+    _aplicar_mencao(db, pessoa, mencao, preparado, extras)
+
+
+def _processar_mencoes(db: Session, pessoa: Pessoa, mencoes: list, extras: dict) -> None:
+    """Extrai várias menções com chamadas ao LLM em paralelo.
+
+    Antes era um laço sequencial de ~7 s por matéria; com 30 matérias do
+    Google Notícias isso passava de 3 minutos e o teto de 20 deixava as
+    demais sem sentimento. Agora download + LLM correm em paralelo e só a
+    gravação no banco (rápida) fica sequencial.
+    """
+    from concurrent.futures import ThreadPoolExecutor
+
+    if not mencoes:
+        return
+    contexto = _contexto_alvo(pessoa)
+    entradas = [(m, m.url, m.titulo, m.texto) for m in mencoes]
+    with ThreadPoolExecutor(max_workers=EXTRACOES_PARALELAS) as pool:
+        futuros = [
+            (m, pool.submit(_preparar_mencao, pessoa.nome, contexto, url, titulo, texto))
+            for m, url, titulo, texto in entradas
+        ]
+        for mencao, futuro in futuros:
+            try:
+                preparado = futuro.result()
+            except Exception as exc:  # uma matéria ruim não derruba as outras
+                logger.warning(f"Menção {mencao.id}: falha na extração ({exc})")
+                continue
+            _aplicar_mencao(db, pessoa, mencao, preparado, extras)
+
+
+def _aplicar_mencao(
+    db: Session, pessoa: Pessoa, mencao: Mencao, preparado: dict, extras: dict
+) -> None:
+    """Grava no banco o resultado da extração de uma menção.
 
     `extras` acumula o que NÃO é persistido em tabela própria (valores
     monetários, empresas citadas) para entrar no consolidado do sintetizador.
     """
-    # Enriquecimento: snippet do buscador é curto (~200 chars) e manchete de
-    # economia raramente nomeia pessoas — o corpo da matéria é onde o grafo
-    # nasce. Baixa uma vez e persiste em mencao.texto (reuso sem re-download).
-    if len(mencao.texto or "") < MIN_TEXTO_COMPLETO:
-        artigo = baixar_artigo(mencao.url)
-        if artigo:
-            mencao.texto = artigo["texto"]
-            # Assinatura confere com o alvo? Ele é o repórter, não o assunto.
-            if eh_autor(pessoa.nome, artigo.get("autor")):
-                mencao.papel = "autor"
-                logger.info(
-                    f"Menção {mencao.id}: assinada pelo alvo ({artigo['autor']}) — "
-                    "não gera conexões"
-                )
-
-    texto = "\n".join(filter(None, [mencao.titulo, mencao.texto]))
-    if not texto.strip():
-        return
-
-    # Contexto rico (nome + cargo/empresa) permite ao extrator detectar
-    # homônimos: matéria sobre "outro" Renato Costa é descartada.
-    contexto = (
-        f"{pessoa.nome} — {pessoa.cargo_atual}" if pessoa.cargo_atual else pessoa.nome
-    )
-    entidades = extrair(texto, contexto)
+    if preparado.get("texto"):
+        mencao.texto = preparado["texto"]
+    if preparado.get("autor"):
+        mencao.papel = "autor"
+    entidades = preparado.get("entidades")
     if entidades is None:
         return
 
@@ -349,9 +457,17 @@ def _processar_mencao(
         return
 
     for citada in entidades.pessoas_mencionadas[:MAX_COMENCIONADOS]:
-        if gerar_slug(citada.nome) == pessoa.slug:
+        if gerar_slug(citada.nome) == pessoa.slug or nome_confere(pessoa.nome, citada.nome):
             continue  # o próprio alvo citado com variação do nome
-        co_pessoa = _get_or_create_pessoa(db, citada.nome, citada.descritor)
+        if len(_tokens_nome(citada.nome)) < 2:
+            # "Lula", "Haddad": apelido ou sobrenome solto vira nó duplicado
+            # do nome completo. O extrator é instruído a canonizar; o que
+            # escapar sem sobrenome fica de fora.
+            logger.info(f"Menção {mencao.id}: nome incompleto ignorado ('{citada.nome}')")
+            continue
+        co_pessoa = _vizinho_equivalente(db, pessoa, citada.nome) or _get_or_create_pessoa(
+            db, citada.nome, citada.descritor
+        )
         # O descritor entra na evidência: é o que identifica QUAL homônimo
         # aquela matéria citava, mesmo que o nó seja atualizado depois.
         ev = {**evidencia, "descritor": citada.descritor} if citada.descritor else evidencia
@@ -528,10 +644,11 @@ def executar_busca(job_id: int) -> None:
         # Auto-recuperação: menções gravadas em execuções anteriores que nunca
         # passaram pelo extrator (sentimento nulo) entram na fila de novo —
         # um force_refresh conserta dossiês que falharam no meio.
+        # Mais recentes primeiro: o teto MAX_EXTRACOES gasta LLM no que é novo.
         pendentes = db.scalars(
-            select(Mencao).where(
-                Mencao.pessoa_id == pessoa.id, Mencao.sentimento.is_(None)
-            )
+            select(Mencao)
+            .where(Mencao.pessoa_id == pessoa.id, Mencao.sentimento.is_(None))
+            .order_by(Mencao.data_publicacao.desc().nulls_last(), Mencao.id.desc())
         ).all()
         if len(pendentes) > len(novas):
             logger.info(
@@ -540,6 +657,14 @@ def executar_busca(job_id: int) -> None:
 
         perfil_linkedin = _atualizar_com_linkedin(db, pessoa)
         db.commit()
+
+        # Sem foto (LinkedIn com foto restrita à rede, ou sem LinkedIn):
+        # tenta o retrato publicado pela imprensa. Só roda enquanto não
+        # houver cópia local, então custa no máximo 1 busca por pessoa.
+        if not caminho_local(pessoa.id):
+            empresa = (perfil_linkedin or {}).get("empresa_atual")
+            completar_foto_pela_imprensa(pessoa, empresa)
+            db.commit()
 
         # Relações formais: cargos sobrepostos na mesma empresa → arestas
         # colega_empresa/co_board (só entre pessoas já pesquisadas).
@@ -550,8 +675,7 @@ def executar_busca(job_id: int) -> None:
 
         # 3. Extração LLM + grafo
         extras: dict = {"empresas": [], "valores_monetarios": []}
-        for mencao in pendentes[:MAX_EXTRACOES]:
-            _processar_mencao(db, pessoa, mencao, extras)
+        _processar_mencoes(db, pessoa, list(pendentes[:MAX_EXTRACOES]), extras)
         db.commit()
 
         # 4. Briefing executivo — sintetiza o estado completo do banco

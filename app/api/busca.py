@@ -64,6 +64,19 @@ def criar_busca(req: BuscaRequest, db: Session = Depends(get_db)) -> BuscaRespon
     """
     from app.services.manutencao import localizar_por_slug
 
+    # Link colado com tracking, /pt, /details...: guarda só a forma canônica
+    # (https://.../in/usuario), senão a mesma pessoa parece ter dois perfis.
+    if req.linkedin_url:
+        from app.services.collectors.apify_linkedin import extrair_url_linkedin
+
+        canonica = extrair_url_linkedin(req.linkedin_url)
+        if not canonica:
+            raise HTTPException(
+                status_code=422,
+                detail="Endereço do LinkedIn inválido. Use o link do perfil (linkedin.com/in/…).",
+            )
+        req.linkedin_url = canonica
+
     slug = gerar_slug(req.nome)
     # Respeita apelidos criados por fusão: buscar "Dani Braun" abre o dossiê
     # da "Daniela Braun" em vez de criar um registro paralelo.
@@ -81,11 +94,35 @@ def criar_busca(req: BuscaRequest, db: Session = Depends(get_db)) -> BuscaRespon
             ),
         )
 
+    # Pessoa que só existe como nó do grafo (citada numa matéria, nunca
+    # identificada): coletar sem saber quem ela é produz dossiê de homônimo.
+    # O analista escolhe o perfil certo OU declara "só imprensa".
+    if (
+        pessoa is not None
+        and not req.linkedin_url
+        and not pessoa.linkedin_url
+        and not pessoa.identidade_confirmada
+        and pessoa.briefing is None  # dossiês antigos só de imprensa seguem valendo
+    ):
+        if not req.somente_imprensa:
+            raise HTTPException(
+                status_code=422,
+                detail=(
+                    "Ainda não sabemos quem é esta pessoa. Escolha o perfil do "
+                    "LinkedIn correspondente ou confirme a coleta só pela imprensa."
+                ),
+            )
+        pessoa.identidade_confirmada = True
+        db.commit()
+        pular_cache_imprensa = True
+    else:
+        pular_cache_imprensa = False
+
     # URL confirmada pelo usuário (fluxo de sugestões): fixa na pessoa ANTES
     # do worker rodar — a descoberta automática é pulada e homônimos somem.
     # Pessoa nova ou perfil trocado precisam de coleta: o cache não vale
     # (o registro recém-criado nasce com atualizado_em "fresco" mas vazio).
-    pular_cache = False
+    pular_cache = pular_cache_imprensa
     if req.linkedin_url:
         if pessoa is None:
             pessoa = Pessoa(

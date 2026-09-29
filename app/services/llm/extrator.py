@@ -62,6 +62,32 @@ class EntidadesExtraidas(BaseModel):
         ),
     )
 
+    @field_validator(
+        "eventos", "empresas_mencionadas", "valores_monetarios", "datas", "temas",
+        mode="before",
+    )
+    @classmethod
+    def _achatar_itens(cls, v):
+        """O modelo às vezes devolve {"name": "Época Negócios 360°"} em vez da
+        string. Antes isso invalidava a extração INTEIRA (a menção ficava
+        pendente para sempre); agora o item é convertido e o resto se salva.
+        """
+        if not isinstance(v, list):
+            return v
+        saida = []
+        for item in v:
+            if isinstance(item, dict):
+                item = next(
+                    (item[k] for k in ("name", "nome", "title", "titulo", "value", "valor")
+                     if isinstance(item.get(k), str)),
+                    next((x for x in item.values() if isinstance(x, str)), None),
+                )
+            if isinstance(item, (int, float)):
+                item = str(item)
+            if isinstance(item, str) and item.strip():
+                saida.append(item.strip())
+        return saida
+
     @field_validator("pessoas_mencionadas", mode="before")
     @classmethod
     def _aceitar_lista_de_nomes(cls, v):
@@ -151,7 +177,13 @@ EXTRATOR_TOOL: dict[str, Any] = {
                     "properties": {
                         "nome": {
                             "type": "string",
-                            "description": "Nome da pessoa como aparece no texto",
+                            "description": (
+                                "Nome COMPLETO e canônico da pessoa, mesmo que o "
+                                "texto use apelido ou só o sobrenome: 'Luiz Inácio "
+                                "Lula da Silva', nunca 'Lula'; 'Jair Messias "
+                                "Bolsonaro', nunca 'Bolsonaro'. Se não souber o "
+                                "nome completo com segurança, não inclua a pessoa."
+                            ),
                         },
                         "descritor": {
                             "type": "string",
@@ -252,6 +284,14 @@ Diretrizes:
   pela pessoa-alvo (ela é repórter, colunista ou assina o artigo), ela não é
   assunto da matéria: marque 'autor' e deixe `pessoas_mencionadas` VAZIA, porque
   as pessoas citadas são pauta dela, não relações dela.
+- Nomes em `pessoas_mencionadas` SEMPRE completos e canônicos (nome e sobrenome
+  pelo qual a pessoa é oficialmente conhecida), para que a mesma pessoa não vire
+  dois nós no grafo: "Lula" → "Luiz Inácio Lula da Silva"; "Haddad" →
+  "Fernando Haddad"; "o presidente da Petrobras" → o nome, se o texto o der.
+  Apelido, só primeiro nome ou só sobrenome sem certeza de quem é: omita.
+- Também NÃO inclua quem só comenta o fato de fora (analistas de banco,
+  consultores ouvidos pela reportagem, porta-vozes genéricos): citar alguém como
+  fonte não é relação com a pessoa-alvo.
 - `empresas_mencionadas`: nomes próprios de companhias, não setores genéricos como "varejo" ou "tecnologia".
 - `datas`: use AAAA-MM-DD quando puder inferir o ano com segurança; caso contrário, omita.
 - `sentimento`: avalie o tom do texto sobre a pessoa-alvo especificamente, não o tom geral.

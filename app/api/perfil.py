@@ -2,7 +2,7 @@
 
 from datetime import date
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
 from sqlalchemy import select
 from sqlalchemy.orm import Session, selectinload
 
@@ -14,6 +14,7 @@ from app.models.pessoa import Pessoa
 from pydantic import BaseModel, Field
 
 from app.services.manutencao import excluir_pessoa, fundir_pessoas
+from app.services.fotos import TAMANHO_MAXIMO, foto_publica, gravar_foto, guardar_foto
 
 
 class FusaoRequest(BaseModel):
@@ -21,7 +22,83 @@ class FusaoRequest(BaseModel):
 
     duplicada_id: int = Field(..., description="ID do registro a ser absorvido")
 
+class FotoRequest(BaseModel):
+    """Endereço de uma imagem pública escolhida pelo analista."""
+
+    url: str = Field(..., min_length=8, max_length=2048)
+
+
 router = APIRouter(prefix="/perfil", tags=["perfil"])
+
+
+@router.post("/{pessoa_id}/desvincular")
+def desvincular_identidade(pessoa_id: int, db: Session = Depends(get_db)) -> dict:
+    """"Não é esta pessoa": desfaz a identidade atribuída ao registro.
+
+    Apaga o que veio do perfil errado (LinkedIn, cargos, foto, briefing
+    que misturou as duas pessoas) e PRESERVA o que veio da imprensa e do
+    grafo: menções e conexões foram coletadas pelo nome, no contexto em
+    que a pessoa certa foi citada. Depois disso o analista escolhe o
+    perfil correto ou coleta só pela imprensa.
+    """
+    from sqlalchemy import delete
+
+    from app.services.fotos import remover_foto
+
+    pessoa = db.get(Pessoa, pessoa_id)
+    if pessoa is None:
+        raise HTTPException(status_code=404, detail="Pessoa não encontrada")
+    db.execute(delete(Cargo).where(Cargo.pessoa_id == pessoa.id))
+    remover_foto(pessoa.id)
+    for campo in ("linkedin_url", "linkedin_dados", "linkedin_coletado_em", "nome_completo",
+                  "cargo_atual", "bio", "foto_url", "localizacao", "briefing"):
+        setattr(pessoa, campo, None)
+    # O cache do /busca não atrapalha: tanto a escolha de um LinkedIn quanto
+    # o "só imprensa" forçam coleta nova para quem não tem identidade.
+    pessoa.identidade_confirmada = False
+    db.commit()
+    return {"desvinculado": True, "pessoa_id": pessoa.id, "contexto_origem": pessoa.contexto_origem}
+
+
+@router.post("/{pessoa_id}/foto")
+def trocar_foto(pessoa_id: int, req: FotoRequest, db: Session = Depends(get_db)) -> dict:
+    """Troca a foto pelo endereço de uma imagem (curadoria do analista).
+
+    Para quando a coleta não acha retrato, ou acha um ruim. Baixamos a
+    imagem na hora e guardamos a cópia, como na coleta.
+    """
+    pessoa = db.get(Pessoa, pessoa_id)
+    if pessoa is None:
+        raise HTTPException(status_code=404, detail="Pessoa não encontrada")
+    url = req.url.strip()
+    if not url.lower().startswith(("http://", "https://")):
+        raise HTTPException(status_code=400, detail="Informe um endereço http(s) de imagem.")
+    if not guardar_foto(pessoa.id, url):
+        raise HTTPException(
+            status_code=400,
+            detail="Não consegui baixar uma imagem desse endereço. Use 'Copiar endereço "
+            "da imagem' (não o da página) ou envie o arquivo.",
+        )
+    pessoa.foto_url = url
+    db.commit()
+    return {"foto_url": foto_publica(pessoa)}
+
+
+@router.post("/{pessoa_id}/foto/arquivo")
+async def enviar_foto(
+    pessoa_id: int, arquivo: UploadFile = File(...), db: Session = Depends(get_db)
+) -> dict:
+    """Troca a foto por um arquivo enviado do computador do analista."""
+    pessoa = db.get(Pessoa, pessoa_id)
+    if pessoa is None:
+        raise HTTPException(status_code=404, detail="Pessoa não encontrada")
+    conteudo = await arquivo.read(TAMANHO_MAXIMO + 1)
+    if not gravar_foto(pessoa.id, conteudo, (arquivo.content_type or "").lower()):
+        raise HTTPException(
+            status_code=400, detail="Envie uma imagem (JPG, PNG ou WEBP) de até 5 MB."
+        )
+    db.commit()
+    return {"foto_url": foto_publica(pessoa)}
 
 # Tamanho do trecho exibido na interface. Deliberadamente curto: é citação
 # para contexto e verificação, não substituto da matéria (ver nota no README
@@ -112,7 +189,9 @@ def obter_perfil(
             "cargo_atual": pessoa.cargo_atual,
             "bio": pessoa.bio,
             "linkedin_url": pessoa.linkedin_url,
-            "foto_url": pessoa.foto_url,
+            "foto_url": foto_publica(pessoa),
+            "identidade_confirmada": bool(pessoa.identidade_confirmada),
+            "contexto_origem": pessoa.contexto_origem,
             "atualizado_em": pessoa.atualizado_em.isoformat() if pessoa.atualizado_em else None,
         },
         "briefing": pessoa.briefing,

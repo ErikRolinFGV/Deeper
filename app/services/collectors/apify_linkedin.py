@@ -136,25 +136,65 @@ def resolver_perfil_por_url(url: str) -> dict | None:
     return {"nome": nome_a_partir_da_url(canonica), "headline": None, "linkedin_url": canonica}
 
 
-def sugerir_perfis_linkedin(consulta: str, limite: int = 5) -> list[dict]:
+def _tokens_nome(texto: str | None) -> list[str]:
+    """Palavras do nome sem acento, minúsculas, ignorando partículas (de, da...)."""
+    import unicodedata
+
+    base = unicodedata.normalize("NFKD", texto or "").encode("ascii", "ignore").decode()
+    return [
+        t for t in re.split(r"[^a-z]+", base.lower())
+        if len(t) > 1 and t not in {"de", "da", "do", "das", "dos", "e"}
+    ]
+
+
+def nome_confere(procurado: str, candidato: str | None) -> bool:
+    """O candidato tem o primeiro nome E o último sobrenome do procurado?
+
+    Tolera nome do meio a mais ou a menos ("Rafael Miotto" x "Rafael Souza
+    Miotto"), mas descarta quem só MENCIONA a pessoa no perfil — o Google
+    devolve para "Rafael Miotto" gente que trabalhou com ele.
+    """
+    alvo = _tokens_nome(procurado)
+    tem = set(_tokens_nome(candidato))
+    if not alvo or not tem:
+        return False
+    return alvo[0] in tem and alvo[-1] in tem
+
+
+def sugerir_perfis_linkedin(
+    consulta: str,
+    limite: int = 5,
+    nome_exigido: str | None = None,
+    contexto: str | None = None,
+) -> list[dict]:
     """Busca perfis públicos candidatos no LinkedIn via SerpAPI.
 
     Usado pelas sugestões de busca: o usuário digita "Eduardo Vale" e recebe
     candidatos reais (nome, headline, URL) para escolher — o que elimina
     typos e homônimos antes de gastar coleta.
 
+    Dois modos:
+    - busca livre ("CEO do Nubank"): candidatos cujo nome bate com a consulta
+      vêm primeiro; se nenhum bater, a consulta não era um nome e todos valem.
+    - `nome_exigido` (pessoa vinda do grafo): busca o nome ENTRE ASPAS e só
+      devolve quem tem esse nome. Lista vazia é resposta legítima: muito
+      executivo de alto escalão não tem perfil público indexado. O `contexto`
+      (descritor da imprensa) só ORDENA os candidatos; colado na consulta,
+      ele fazia o Google trazer qualquer funcionário da empresa citada.
+
     Custa 1 busca SerpAPI por chamada — o frontend só chama sob demanda.
     """
     if not consulta.strip():
         return []
 
-    logger.info(f"Sugestões LinkedIn: '{consulta}'")
+    q = f'site:linkedin.com/in "{nome_exigido}"' if nome_exigido else f"site:linkedin.com/in {consulta}"
+    logger.info(f"Sugestões LinkedIn: '{q}'")
     params = {
         "engine": "google",
-        "q": f"site:linkedin.com/in {consulta}",
+        "q": q,
         "hl": "pt-br",
         "gl": "br",
-        "num": limite + 3,  # margem para descartar resultados sem /in/
+        "num": 10,  # margem para descartar resultados sem /in/ ou de outro nome
         "api_key": settings.SERPAPI_KEY,
     }
     try:
@@ -165,20 +205,30 @@ def sugerir_perfis_linkedin(consulta: str, limite: int = 5) -> list[dict]:
         logger.error(f"Sugestões LinkedIn falharam para '{consulta}': {exc}")
         return []
 
-    sugestoes = []
+    candidatos = []
     vistos: set[str] = set()
     for item in dados.get("organic_results", []) or []:
         m = _LINKEDIN_IN.search(item.get("link") or "")
         if not m:
             continue
         url = m.group(0)
-        if url in vistos:
+        if url.lower() in vistos:
             continue
-        vistos.add(url)
-        sugestoes.append(_candidato_de_resultado(item, url))
-        if len(sugestoes) >= limite:
-            break
-    return sugestoes
+        vistos.add(url.lower())
+        candidatos.append(_candidato_de_resultado(item, url))
+
+    if nome_exigido:
+        candidatos = [c for c in candidatos if nome_confere(nome_exigido, c["nome"])]
+        pistas = set(_tokens_nome(contexto)) - set(_tokens_nome(nome_exigido))
+        if pistas:
+            candidatos.sort(
+                key=lambda c: -len(pistas & set(_tokens_nome(c.get("headline"))))
+            )
+    else:
+        batem = [c for c in candidatos if nome_confere(consulta, c["nome"])]
+        if batem:
+            candidatos = batem + [c for c in candidatos if c not in batem]
+    return candidatos[:limite]
 
 
 # ---------- 2. coleta via actor Apify ----------

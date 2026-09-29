@@ -173,11 +173,11 @@ def test_busca_trocar_linkedin_url_zera_dossie_do_homonimo(client, db):
 
 
 def test_busca_sem_linkedin_url_so_para_pessoa_existente(client, db):
-    """Pessoa já no banco pode ser re-buscada sem URL; nova é rejeitada."""
+    """Pessoa pesquisada pode ser re-buscada sem URL; nova é rejeitada."""
     resp = client.post("/busca", json={"nome": "Fulano Qualquer"})
     assert resp.status_code == 422  # pessoa nova sem seleção: bloqueada
 
-    db.add(Pessoa(slug="fulano-qualquer", nome="Fulano Qualquer"))
+    db.add(Pessoa(slug="fulano-qualquer", nome="Fulano Qualquer", identidade_confirmada=True))
     db.commit()
     corpo = client.post(
         "/busca", json={"nome": "Fulano Qualquer", "force_refresh": True}
@@ -185,10 +185,72 @@ def test_busca_sem_linkedin_url_so_para_pessoa_existente(client, db):
     assert corpo["job_id"] is not None  # existente: re-coleta liberada
 
 
+def test_no_do_grafo_sem_identidade_exige_escolha_ou_so_imprensa(client, db):
+    """Caso Rafael Miotto: "Atualizar dossiê" de um nó nunca identificado
+    coletava um homônimo. Agora exige escolher o perfil ou declarar só imprensa."""
+    no = Pessoa(slug="rafael-miotto", nome="Rafael Miotto",
+                contexto_origem="Presidente da CNH para a América Latina")
+    db.add(no)
+    db.commit()
+
+    resp = client.post("/busca", json={"nome": "Rafael Miotto", "force_refresh": True})
+    assert resp.status_code == 422
+    assert "quem é esta pessoa" in resp.json()["detail"]
+
+    corpo = client.post(
+        "/busca", json={"nome": "Rafael Miotto", "somente_imprensa": True}
+    ).json()
+    assert corpo["job_id"] is not None and corpo["cache_hit"] is False
+    db.expire_all()
+    p = db.get(Pessoa, no.id)
+    assert p.identidade_confirmada is True and p.linkedin_url is None
+
+    # "só imprensa" não cria pessoa nova: essa continua exigindo seleção
+    resp = client.post("/busca", json={"nome": "Ninguém Novo", "somente_imprensa": True})
+    assert resp.status_code == 422
+
+
+def test_desvincular_apaga_perfil_errado_e_preserva_imprensa_e_grafo(client, db):
+    from app.models.cargo import Cargo
+    from app.models.empresa import Empresa
+    from app.models.mencao import Mencao
+
+    raiz = Pessoa(slug="alberto-griselli", nome="Alberto Griselli", briefing="x",
+                  identidade_confirmada=True)
+    errado = Pessoa(slug="rafael-miotto", nome="Rafael Miotto", briefing="mistura",
+                    linkedin_url="https://www.linkedin.com/in/rafael-analista", identidade_confirmada=True,
+                    cargo_atual="Career Break", contexto_origem="Presidente da CNH")
+    db.add_all([raiz, errado])
+    db.flush()
+    db.add(Relacao(pessoa_a_id=raiz.id, pessoa_b_id=errado.id, tipo="co_mencionado",
+                   peso=1, evidencias=[{"titulo": "M"}]))
+    db.add(Mencao(pessoa_id=errado.id, fonte="forbes", url="https://f/1", titulo="CNH"))
+    emp = Empresa(slug="banco-x", nome="Banco X")
+    db.add(emp)
+    db.flush()
+    db.add(Cargo(pessoa_id=errado.id, empresa_id=emp.id, funcao="Analista"))
+    db.commit()
+    errado_id = errado.id
+
+    r = client.post(f"/perfil/{errado_id}/desvincular")
+    assert r.status_code == 200
+    assert r.json()["contexto_origem"] == "Presidente da CNH"
+    db.expire_all()
+    p = db.get(Pessoa, errado_id)
+    assert (p.linkedin_url, p.briefing, p.cargo_atual, p.identidade_confirmada) == (None, None, None, False)
+    assert db.scalars(select(Cargo).where(Cargo.pessoa_id == errado_id)).all() == []
+    assert len(db.scalars(select(Mencao).where(Mencao.pessoa_id == errado_id)).all()) == 1
+    assert len(db.scalars(select(Relacao)).all()) == 1
+    assert client.post("/perfil/9999/desvincular").status_code == 404
+
+    # depois de desvincular, "Atualizar dossiê" exige identificar de novo
+    assert client.post("/busca", json={"nome": "Rafael Miotto"}).status_code == 422
+
+
 def test_confirmar_no_do_grafo_preserva_conexoes(client, db):
     """Pesquisar um nó do grafo NÃO pode apagar a conexão que levou até ele."""
     raiz = Pessoa(slug="marcelo-diego", nome="Marcelo Diego", briefing="x",
-                  linkedin_url="https://l/in/marcelo", identidade_confirmada=True)
+                  linkedin_url="https://www.linkedin.com/in/marcelo", identidade_confirmada=True)
     no = Pessoa(slug="joao-pedro", nome="João Pedro",
                 contexto_origem="filho do executivo")  # nasceu de co-menção
     db.add_all([raiz, no])
@@ -200,11 +262,11 @@ def test_confirmar_no_do_grafo_preserva_conexoes(client, db):
 
     # o analista confirma quem é o João Pedro
     client.post("/busca", json={"nome": "João Pedro",
-                                "linkedin_url": "https://l/in/joao-pedro-real"})
+                                "linkedin_url": "https://www.linkedin.com/in/joao-pedro-real"})
 
     db.expire_all()
     atualizado = db.get(Pessoa, no_id)
-    assert atualizado.linkedin_url == "https://l/in/joao-pedro-real"
+    assert atualizado.linkedin_url == "https://www.linkedin.com/in/joao-pedro-real"
     assert atualizado.identidade_confirmada is True
     # a aresta com quem o trouxe continua de pé
     rel = db.scalar(select(Relacao))
@@ -219,7 +281,7 @@ def test_confirmar_no_do_grafo_preserva_conexoes(client, db):
 def test_trocar_perfil_ja_confirmado_ainda_zera(client, db):
     """A proteção contra homônimo continua valendo para quem JÁ tinha perfil."""
     p = Pessoa(slug="renato-costa", nome="Renato Costa", briefing="do CIO",
-               linkedin_url="https://l/in/renato-cio", identidade_confirmada=True)
+               linkedin_url="https://www.linkedin.com/in/renato-cio", identidade_confirmada=True)
     outro = Pessoa(slug="outro", nome="Outro")
     db.add_all([p, outro])
     db.flush()
@@ -229,7 +291,7 @@ def test_trocar_perfil_ja_confirmado_ainda_zera(client, db):
     pid = p.id
 
     client.post("/busca", json={"nome": "Renato Costa",
-                                "linkedin_url": "https://l/in/renato-friboi"})
+                                "linkedin_url": "https://www.linkedin.com/in/renato-friboi"})
 
     db.expire_all()
     assert db.get(Pessoa, pid).briefing is None
@@ -286,7 +348,7 @@ def test_excluir_perfil_remove_tudo_que_dependia_dele(client, db):
 def test_excluir_perfil_limpa_nos_orfaos(client, db):
     """Nó que só existia por co-menção some junto; quem tem dossiê fica."""
     alvo = Pessoa(slug="alvo", nome="Alvo", briefing="x",
-                  linkedin_url="https://l/in/alvo")
+                  linkedin_url="https://www.linkedin.com/in/alvo")
     fantasma = Pessoa(slug="so-citado", nome="Só Citado")  # nasceu de co-menção
     com_dossie = Pessoa(slug="com-dossie", nome="Com Dossiê", briefing="tem",
                         identidade_confirmada=True)
@@ -437,15 +499,21 @@ def test_busca_com_linkedin_confirmado_marca_identidade(client, db):
     assert pessoa.identidade_confirmada is True
 
 
-def test_sugestoes_usam_contexto_na_query_do_linkedin(client, monkeypatch):
-    consultas = []
+def test_sugestoes_do_grafo_exigem_nome_e_usam_contexto_so_para_ordenar(client, monkeypatch):
+    chamadas = []
     monkeypatch.setattr(
         sugestoes_api, "sugerir_perfis_linkedin",
-        lambda q, limite=5: (consultas.append(q), [])[1],
+        lambda q, limite=5, nome_exigido=None, contexto=None: (chamadas.append((q, nome_exigido, contexto)), [])[1],
     )
 
     client.get("/sugestoes?q=Jo%C3%A3o%20Pedro&externas=true&contexto=CFO%20da%20Vale")
-    assert consultas == ["João Pedro CFO da Vale"]
+    assert chamadas[-1] == ("João Pedro", "João Pedro", "CFO da Vale")
+    # vindo do grafo sem descritor: contexto vazio ainda liga o modo estrito
+    client.get("/sugestoes?q=Jo%C3%A3o%20Pedro&externas=true&contexto=")
+    assert chamadas[-1] == ("João Pedro", "João Pedro", "")
+    # busca livre: modo antigo
+    client.get("/sugestoes?q=CEO%20do%20Nubank&externas=true")
+    assert chamadas[-1] == ("CEO do Nubank", None, None)
 
 
 # ---------- anotação humana nas relações ----------
@@ -752,3 +820,33 @@ def test_grafo_limita_evidencias_por_aresta(client, db):
     evs = corpo["edges"][0]["evidencias"]
     assert len(evs) == MAX_EVIDENCIAS
     assert evs[-1]["titulo"] == "M19"  # mantém as mais recentes
+
+
+def test_vincular_linkedin_a_dossie_so_de_imprensa(client, db):
+    """Caso Pablo Cesário: dossiê montado só pela imprensa ganha o LinkedIn
+    depois. O link vem sujo (tracking, barra final) e o registro certo é
+    enriquecido, sem apagar as conexões nem criar "Pabloscesario"."""
+    raiz = Pessoa(slug="gustavo-pimenta", nome="Gustavo Pimenta", briefing="x", identidade_confirmada=True)
+    pablo = Pessoa(slug="pablo-cesario", nome="Pablo Cesário", briefing="só imprensa",
+                   identidade_confirmada=True, contexto_origem="diretor do Ibram")
+    db.add_all([raiz, pablo])
+    db.flush()
+    db.add(Relacao(pessoa_a_id=raiz.id, pessoa_b_id=pablo.id, tipo="co_mencionado",
+                   peso=3, evidencias=[{"titulo": "Ibram"}]))
+    db.commit()
+    pablo_id = pablo.id
+
+    r = client.post("/busca", json={
+        "nome": "Pablo Cesário", "force_refresh": True,
+        "linkedin_url": "https://br.linkedin.com/in/pabloscesario/?utm_source=share",
+    })
+    assert r.status_code == 200 and r.json()["job_id"] is not None
+    db.expire_all()
+    p = db.get(Pessoa, pablo_id)
+    assert p.linkedin_url == "https://br.linkedin.com/in/pabloscesario"
+    assert p.briefing == "só imprensa"  # não zerou: não havia perfil antes
+    assert len(db.scalars(select(Relacao)).all()) == 1
+    assert len(db.scalars(select(Pessoa)).all()) == 2
+
+    r = client.post("/busca", json={"nome": "Pablo Cesário", "linkedin_url": "https://site.com/pablo"})
+    assert r.status_code == 422

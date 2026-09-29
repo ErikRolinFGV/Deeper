@@ -47,3 +47,9 @@ logs/
 *.dump
 *.sql.bak
 data_local/
+
+# Cache local das fotos de perfil (regenerável pela coleta)
+media/
+
+# Saidas temporarias de teste
+.tmp_teste/

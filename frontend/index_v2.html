@@ -102,6 +102,8 @@
   .sug-sub { font-size: 12.5px; color: var(--tx4); margin-top: 1px; }
   .badge-pronto { font-size: 10px; font-weight: 800; letter-spacing: 0.06em; text-transform: uppercase; color: var(--ac); border: 1px solid rgba(245,146,30,0.4); background: rgba(245,146,30,0.1); padding: 3px 9px; border-radius: 999px; margin-left: auto; flex-shrink: 0; }
   .badge-li { margin-left: auto; flex-shrink: 0; font-size: 11px; color: var(--tx5); }
+  .sug-pendente { margin: 4px 20px 6px; padding: 12px 14px; border: 1px dashed var(--bd4); border-radius: 10px; background: rgba(255,255,255,0.02); }
+  .sug-imprensa { border-top: 1px solid var(--bd1); margin-top: 6px; }
 
   .toggle-row { display: flex; align-items: center; gap: 10px; cursor: pointer; user-select: none; }
   .toggle { width: 36px; height: 20px; border-radius: 999px; padding: 2px; background: var(--bd3); transition: background 0.15s; flex-shrink: 0; }
@@ -223,7 +225,7 @@
       --bd1: #E4DDD2; --bd2: #E4DDD2; --bd3: #D5CCBD; --bd4: #C2B7A4; --bd5: #C2B7A4;
       --tx1: #1A130B; --tx2: #2A2115; --tx3: #4A3C26; --tx4: #6E5F49; --tx5: #8A7A64; --tx6: #B3A48E; }
     body { background: #fff !important; }
-    .orbes, .topbar button, #sec-grafo, .btn-side, .sidebar { display: none !important; }
+    .orbes, .topbar button, #sec-grafo, .btn-side, .sidebar, .no-print { display: none !important; }
     .topbar { position: static; background: #fff; }
     .sec { opacity: 1 !important; animation: none !important; }
     .mencao-card, .ajuda-card, .faq-det { break-inside: avoid; }
@@ -398,6 +400,8 @@
         <div id="dos-cargo" style="font-size:16px;color:var(--tx3);"></div>
         <div style="display:flex;align-items:center;gap:18px;font-size:13px;">
           <a id="dos-linkedin" href="#" target="_blank" rel="noopener">Perfil no LinkedIn ↗</a>
+          <a id="dos-vincular" href="#" class="no-print" onclick="abrirVincularLinkedin();return false;" style="color:var(--ac);font-size:13px;" title="Já sabe qual é o perfil? Cole o link e o dossiê é enriquecido com a trajetória">+ vincular LinkedIn</a>
+          <a id="dos-desvincular" href="#" class="no-print" onclick="desvincularIdentidade();return false;" style="color:var(--tx5);font-size:12px;" title="O perfil coletado é de um homônimo? Desfaz e deixa você escolher o certo">não é esta pessoa?</a>
         </div>
       </div>
     </div>
@@ -497,9 +501,10 @@ async function fetchJSON(url, opts) {
 
 async function buscarSugestoes(q, contexto) {
   // GET /sugestoes — locais (banco, grátis) + linkedin (SerpAPI, 1 busca).
-  // `contexto` (descritor vindo do grafo) só entra na query do LinkedIn.
+  // `contexto` != null = pessoa vinda do grafo: o servidor só aceita
+  // candidatos com o mesmo nome e usa o descritor para ordená-los.
   try {
-    const ctx = contexto ? `&contexto=${encodeURIComponent(contexto)}` : '';
+    const ctx = contexto != null ? `&contexto=${encodeURIComponent(contexto)}` : '';
     return await fetchJSON(`${API_BASE}/sugestoes?q=${encodeURIComponent(q)}&externas=true${ctx}`);
   } catch (e) {
     return { locais: [], linkedin: [], erro: e.message };
@@ -519,11 +524,12 @@ async function carregarAcervo() {
   return estado.acervo;
 }
 
-async function iniciarColeta(nome, linkedinUrl, forceRefresh) {
+async function iniciarColeta(nome, linkedinUrl, forceRefresh, somenteImprensa) {
   // POST /busca → (cache_hit ? direto) : polling GET /job/{id} até done/failed
   try {
     const body = { nome, force_refresh: !!forceRefresh };
     if (linkedinUrl) body.linkedin_url = linkedinUrl;
+    else if (somenteImprensa) body.somente_imprensa = true;
     const busca = await fetchJSON(`${API_BASE}/busca`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -767,7 +773,11 @@ const FAQ_SECOES = [
     ['O que significa "assinada por ele(a)" numa menção?', 'A pessoa escreveu aquela matéria — era repórter ou colunista, não assunto. Essas matérias contam como trajetória, mas não geram conexões no grafo nem entram no cálculo de sentimento: o tom de um texto que ela escreveu não diz como a mídia a trata.'],
     ['O que é "ver trecho coletado"?', 'Mostra o trecho da versão pública da matéria que usamos na análise, para você julgar sem sair da ferramenta. A leitura integral continua sendo no site do veículo — a ferramenta não contorna paywall.'],
     ['Alguns campos aparecem como "não informado". Por quê?', 'As fontes públicas nem sempre trazem tudo. O app mostra o que existe e sinaliza o que falta, em vez de inventar.'],
-    ['A foto do executivo sumiu.', 'As fotos vêm do LinkedIn e a URL expira. Quando isso acontece, mostramos as iniciais; uma recoleta renova a foto.']
+    ['Cliquei numa pessoa do grafo e ela não tem LinkedIn nas sugestões. E agora?', 'Quem aparece no grafo só por ter sido citado numa matéria ainda não tem identidade confirmada. Nas sugestões, só entram perfis do LinkedIn com exatamente aquele nome, ordenados pelo que a imprensa diz sobre a pessoa. Se nenhum for ela (muito executivo de alto escalão não tem perfil público indexado), use "coletar só pela imprensa": o dossiê sai das matérias, sem risco de pegar um homônimo.'],
+    ['Montei o dossiê só pela imprensa e depois achei o LinkedIn. Como junto?', 'No cabeçalho do dossiê, clique em "+ vincular LinkedIn" e cole o link do perfil. A coleta roda de novo e acrescenta trajetória, formação e foto; as matérias e as conexões continuam. Não cole o link na busca principal: se o Google não tiver indexado o perfil, o nome sai do endereço (ex.: "Pabloscesario") e o app cria outra pessoa.'],
+    ['O dossiê trouxe o LinkedIn de outra pessoa. Como corrijo?', 'Clique em "não é esta pessoa?", ao lado do link do LinkedIn. Saem o perfil, os cargos, a foto e o briefing dele; as matérias e as conexões do grafo ficam. Em seguida você escolhe o perfil certo ou coleta só pela imprensa.'],
+    ['Por que alguns executivos vêm sem foto do LinkedIn?', 'Muita gente deixa a foto visível só para a própria rede de contatos, e o perfil público não a entrega. Nesses casos a coleta procura um retrato publicado pela imprensa, mas só aceita imagens cujo arquivo leva o nome da pessoa, para não pôr o rosto de outra no dossiê. Se nada passar nesse filtro, aparecem as iniciais e você pode usar o link "adicionar foto" abaixo delas, colando o endereço de uma imagem ou enviando um arquivo.'],
+    ['A foto do executivo sumiu.', 'O LinkedIn entrega a foto por uma URL assinada que vence em algumas semanas. Por isso guardamos uma cópia da imagem na coleta e servimos ela pelo Deeper — a foto não expira mais. Dossiês coletados antes dessa mudança recuperam a foto na primeira atualização; até lá aparecem as iniciais.']
   ]],
   ['Grafo de conexões', [
     ['O que significam as linhas diferentes?', 'Laranja sólida: laço formal (ex-colegas de empresa ou conselho em comum, por períodos sobrepostos no LinkedIn). Cinza: co-menção na imprensa. Pontilhada: co-participação em evento. Tracejada esmaecida: citados juntos apenas em listas/rankings. Tracejada turquesa: conexão registrada por um analista.'],
@@ -790,7 +800,7 @@ const FAQ_SECOES = [
     ['Só consigo conectar algumas pessoas. Por quê?', 'Conexões manuais só podem ser criadas entre pessoas já pesquisadas. Isso evita que o acervo vire depósito de nomes soltos. Pesquise a pessoa primeiro e a conexão fica disponível.']
   ]],
   ['Dados e privacidade', [
-    ['De onde vêm os dados?', 'Somente fontes públicas: o perfil público do LinkedIn (sem login) e a imprensa brasileira (Valor, Estadão, Folha, O Globo, Exame, InfoMoney, NeoFeed, Veja, IstoÉ Dinheiro, Brazilian Report).'],
+    ['De onde vêm os dados?', 'Somente fontes públicas: o perfil público do LinkedIn (sem login) e a imprensa indexada pelo Google Notícias, geral e setorial (Valor, Estadão, Folha, O Globo, Exame, InfoMoney, Veja, mas também veículos de nicho como TeleSíntese, Teletime ou Você RH). As matérias mais recentes vêm primeiro. Quando o Google Notícias traz pouca coisa, a coleta complementa com uma busca nos grandes portais, que acha perfis e entrevistas mais antigas.'],
     ['O grafo usa a lista de conexões do LinkedIn?', 'Não — essa lista não é pública e não é acessada. A rede é inferida de fatos públicos: trajetórias que se sobrepõem e matérias que citam as duas pessoas. Por isso cada linha vem com as evidências anexadas.'],
     ['A ferramenta contorna paywall?', 'Não. Ela mostra o trecho da versão pública da matéria, que é o que qualquer visitante vê, com link para a íntegra no veículo. Reproduzir matéria completa é assunto de licenciamento, não de tecnologia.'],
     ['Vocês coletam dados sensíveis?', 'Não. Nada de contatos, mensagens, telefone ou dados sensíveis (saúde, religião, opinião política). Apenas informação profissional de figuras públicas em capacidade profissional.'],
@@ -820,8 +830,13 @@ async function submeterBusca() {
   const org = (estado.origemGrafo && estado.origemGrafo.nome.toLowerCase() === q.toLowerCase())
     ? estado.origemGrafo : null;
   if (!org) estado.origemGrafo = null;
-  const sug = await buscarSugestoes(q, org ? org.contexto : '');
-  const locais = (sug.locais||[]).map((p,i) => `
+  const sug = await buscarSugestoes(q, org ? (org.contexto || '') : null);
+  // Nó do grafo nunca identificado (citado numa matéria, sem LinkedIn nem
+  // dossiê): abrir daria página vazia. Vira aviso, e as ações são escolher
+  // o perfil certo abaixo ou coletar só pela imprensa.
+  const semId = p => !p.tem_briefing && !p.identidade_confirmada && !p.tem_linkedin;
+  const pendentes = (sug.locais||[]).map((p,i) => ({ p, i })).filter(x => semId(x.p));
+  const locais = (sug.locais||[]).map((p,i) => semId(p) ? '' : `
     <div class="sug-item" onclick="escolherLocal(${i})">
       <div class="sug-avatar">${p.foto_url ? `<img src="${esc(p.foto_url)}" onerror="this.remove()" alt="">` : ''}<span style="position:absolute;">${p.foto_url ? '' : iniciais(p.nome)}</span></div>
       <div style="min-width:0;"><div class="sug-nome">${esc(p.nome)}</div><div class="sug-sub">${esc(p.cargo_atual || 'cargo não informado')}</div></div>
@@ -839,7 +854,7 @@ async function submeterBusca() {
     ${org ? `<div class="banner-ctx">
       <span style="color:var(--ac);font-size:15px;line-height:1;">◆</span>
       <div style="font-size:12.5px;color:var(--tx3);line-height:1.5;">
-        Veio do grafo de <strong style="color:var(--tx1);">${esc(org.deQuem || 'outro executivo')}</strong>.
+        ${org.deQuem ? `Veio do grafo de <strong style="color:var(--tx1);">${esc(org.deQuem)}</strong>.` : 'Identificando quem é esta pessoa.'}
         ${org.contexto ? `Na imprensa, este <strong style="color:var(--tx1);">${esc(org.nome)}</strong> aparece como <strong style="color:var(--ac);">${esc(org.contexto)}</strong> —` : 'As fontes não trouxeram cargo nem vínculo para este nome —'}
         confira o headline antes de escolher, para não coletar um homônimo.
       </div></div>` : ''}
@@ -849,10 +864,19 @@ async function submeterBusca() {
         : 'Confirme quem você procura — <strong style="color:var(--tx1);">a coleta só começa depois da sua escolha</strong>'}</span>
       <span onclick="fecharSugestoes()" style="cursor:pointer;color:var(--tx5);font-size:18px;line-height:1;">×</span>
     </div>
-    ${locais ? `<div class="sug-secao-titulo"><span style="width:7px;height:7px;border-radius:50%;background:var(--ac);"></span>No acervo — resposta instantânea</div>${locais}` : ''}
+    ${locais.trim() ? `<div class="sug-secao-titulo"><span style="width:7px;height:7px;border-radius:50%;background:var(--ac);"></span>No acervo — resposta instantânea</div>${locais}` : ''}
+    ${pendentes.length ? `<div class="sug-pendente">
+      <div style="font-size:13px;color:var(--tx2);font-weight:700;">${esc(pendentes[0].p.nome)} já está no grafo, mas ainda não sabemos quem é</div>
+      <div style="font-size:12.5px;color:var(--tx4);line-height:1.5;margin-top:4px;">Ele foi citado numa matéria e nunca teve o perfil confirmado. ${li ? 'Se um dos perfis abaixo for ele, escolha-o.' : 'Não achamos no LinkedIn ninguém com esse nome: executivos de alto escalão muitas vezes não têm perfil público indexado.'}</div>
+    </div>` : ''}
     ${li ? `<div class="sug-secao-titulo" style="border-top:1px solid var(--bd1);margin-top:6px;padding-top:14px;"><span style="width:7px;height:7px;border-radius:50%;background:var(--tx5);"></span>${sug.por_url ? 'Perfil do link — inicia uma coleta (20–60s)' : 'LinkedIn — inicia uma coleta (20–60s)'}</div>${li}` : ''}
-    ${!locais && !li && sug.por_url ? '<div style="padding:20px;color:var(--tx4);font-size:13.5px;">Não consegui identificar esse link. Confira se é um endereço de perfil (linkedin.com/in/…).</div>' : ''}
-    ${!locais && !li && !sug.por_url ? (sug.erro
+    ${pendentes.length ? `<div class="sug-item sug-imprensa" onclick="escolherSomenteImprensa(${pendentes[0].i})">
+      <div class="sug-avatar" style="background:rgba(245,146,30,0.12);color:var(--ac);font-size:15px;">◆</div>
+      <div style="min-width:0;flex:1;"><div class="sug-nome">${li ? 'Nenhum destes: coletar só pela imprensa' : 'Coletar só pela imprensa'}</div>
+      <div class="sug-sub">Monta o dossiê com as matérias em que ${esc(pendentes[0].p.nome)} aparece${pendentes[0].p.contexto_origem ? ` como <span style="color:var(--ac);">${esc(pendentes[0].p.contexto_origem)}</span>` : ''}, sem LinkedIn.</div></div>
+    </div>` : ''}
+    ${!locais.trim() && !li && !pendentes.length && sug.por_url ? '<div style="padding:20px;color:var(--tx4);font-size:13.5px;">Não consegui identificar esse link. Confira se é um endereço de perfil (linkedin.com/in/…).</div>' : ''}
+    ${!locais.trim() && !li && !pendentes.length && !sug.por_url ? (sug.erro
       ? `<div style="padding:20px;color:var(--neg);font-size:13.5px;">${esc(sug.erro)}</div>`
       : '<div style="padding:20px;color:var(--tx4);font-size:13.5px;">Nenhum resultado. Refine o nome ou tente cargo + empresa.</div>') : ''}
     <div style="padding:10px 20px 14px;font-size:11.5px;color:var(--tx5);">${sug.por_url
@@ -936,6 +960,12 @@ function escolherLocal(i) {
   fecharSugestoes();
   abrirDossie(p.pessoa_id);
 }
+function escolherSomenteImprensa(i) {
+  const p = estado.sugestoesAtuais.locais[i];
+  estado.selecao = { nome: p.nome, headline: p.contexto_origem, pessoa_id: p.pessoa_id, local: true, somente_imprensa: true };
+  registrarHistorico(p.nome);
+  executarColeta();
+}
 function escolherLinkedin(i) {
   const p = estado.sugestoesAtuais.linkedin[i];
   estado.selecao = { nome: p.nome, headline: p.headline, linkedin_url: p.linkedin_url, local: false };
@@ -986,7 +1016,7 @@ async function executarColeta() {
   });
 
   // A chamada real começa AGORA, em paralelo com a animação das etapas.
-  const res = await iniciarColeta(sel.nome, sel.linkedin_url, forcar);
+  const res = await iniciarColeta(sel.nome, sel.linkedin_url, forcar, sel.somente_imprensa);
   if (estado.cancelado) return;
   limparTimers();
   if (!res.ok) { mostrarErro(res.erro); return; }
@@ -1031,11 +1061,19 @@ async function abrirDossie(pessoaId) {
   $('dos-nome').textContent = pes.nome || '';
   $('dos-cargo').textContent = pes.cargo_atual || 'cargo não informado';
   $('dos-linkedin').href = pes.linkedin_url || '#';
-  // foto com fallback de iniciais
-  const fw = $('dos-foto');
-  fw.innerHTML = `<div style="width:100px;height:100px;border-radius:50%;background:linear-gradient(135deg,rgba(255,178,92,0.25),rgba(224,109,16,0.25));border:2px solid var(--bd4);display:flex;align-items:center;justify-content:center;font-size:32px;font-weight:800;color:#fff;overflow:hidden;position:relative;">
-    <span>${iniciais(pes.nome)}</span>${pes.foto_url ? `<img src="${esc(pes.foto_url)}" onerror="this.remove()" style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover;" alt="">` : ''}</div>`;
-  $('dos-briefing').innerHTML = p.briefing
+  $('dos-linkedin').style.display = pes.linkedin_url ? '' : 'none';
+  $('dos-desvincular').style.display = pes.linkedin_url ? '' : 'none';
+  // Só faz sentido para quem já tem identidade (ou dossiê): quem ainda não
+  // tem passa pelo "Identificar esta pessoa", que oferece as mesmas opções.
+  $('dos-vincular').style.display = (!pes.linkedin_url && !semIdentidade(pes)) || (!pes.linkedin_url && p.briefing) ? '' : 'none';
+  renderFotoDossie(pes);
+  $('dos-briefing').innerHTML = (!p.briefing && semIdentidade(pes))
+    ? `<div class="sug-pendente" style="margin:0;padding:18px 20px;">
+        <div style="font-size:15px;color:var(--tx1);font-weight:700;">Ainda não sabemos quem é ${esc(pes.nome)}</div>
+        <div style="font-size:13.5px;color:var(--tx4);line-height:1.6;margin-top:6px;">Esta pessoa entrou no acervo porque foi citada numa matéria${pes.contexto_origem ? `, como <strong style="color:var(--ac);">${esc(pes.contexto_origem)}</strong>` : ''}. Antes de coletar, confirme o perfil certo no LinkedIn ou escolha montar o dossiê só pela imprensa.</div>
+        <button class="btn-solido" style="margin-top:14px;padding:9px 20px;font-size:13px;" onclick="identificarPessoa()">Identificar esta pessoa →</button>
+      </div>`
+    : p.briefing
     ? p.briefing.split('\n\n').map(t => `<p style="margin:0;font-size:18.5px;line-height:1.68;color:var(--tx2);text-wrap:pretty;">${esc(t)}</p>`).join('')
     : `<div class="vazio">O briefing desta pessoa ainda não foi gerado — normalmente isso significa que a coleta é recente e a análise com IA não rodou. <a href="#" onclick="atualizarDossie();return false;">Forçar nova coleta</a> resolve.</div>`;
   $('btn-copiar').style.display = p.briefing ? 'inline-block' : 'none';
@@ -1104,7 +1142,20 @@ async function abrirDossie(pessoaId) {
   });
   atualizarGrafo(true);
 }
+function semIdentidade(pes) {
+  return pes && !pes.identidade_confirmada && !pes.linkedin_url;
+}
+/* Leva à escolha de identidade (mesmo fluxo de quem vem do grafo). */
+function identificarPessoa() {
+  const pes = estado.perfil.pessoa;
+  pesquisarDoGrafo(pes.nome, pes.contexto_origem || '', null);
+}
 function atualizarDossie() {
+  // Sem saber quem é, "atualizar" coletaria um homônimo qualquer.
+  if (estado.perfil && semIdentidade(estado.perfil.pessoa) && !estado.perfil.briefing) {
+    identificarPessoa();
+    return;
+  }
   estado.selecao = estado.selecao || { nome: estado.perfil.pessoa.nome, headline: estado.perfil.pessoa.cargo_atual };
   estado.selecao.nome = estado.perfil ? estado.perfil.pessoa.nome : estado.selecao.nome;
   estado.selecao.linkedin_url = estado.perfil ? estado.perfil.pessoa.linkedin_url : estado.selecao.linkedin_url;
@@ -1303,14 +1354,15 @@ function mostrarCardNo(d) {
 
 /* Salta de um nó do grafo para uma nova pesquisa: sai do dossiê atual e já
    abre o painel de sugestões com o nome preenchido. */
-function pesquisarDoGrafo(nome, contexto) {
+function pesquisarDoGrafo(nome, contexto, deQuem) {
   if ($('grafo-shell').classList.contains('fullscreen')) alternarFullscreen();
   // Guarda de onde viemos: o descritor da matéria entra na busca do LinkedIn
   // e o painel mostra o contexto para o analista comparar com os headlines.
   estado.origemGrafo = {
     nome,
     contexto: contexto || '',
-    deQuem: estado.perfil ? estado.perfil.pessoa.nome : null
+    // deQuem === null: a própria pessoa pedindo identificação (não veio de outro grafo)
+    deQuem: deQuem !== undefined ? deQuem : (estado.perfil ? estado.perfil.pessoa.nome : null)
   };
   fecharCards();
   voltarBusca();              // limpa timers, destrói o cy e volta à tela de busca
@@ -1387,7 +1439,7 @@ async function abrirConexaoManual() {
   renderConexaoManual('');
 }
 
-function renderConexaoManual(filtro) {
+function itensConexaoManual(filtro) {
   const f = (filtro || '').toLowerCase();
   const candidatos = (estado.acervo || [])
     .filter(p => p.pessoa_id !== conexaoAlvo.id)
@@ -1399,7 +1451,14 @@ function renderConexaoManual(filtro) {
       <div style="min-width:0;"><div class="sug-nome">${esc(p.nome)}</div><div class="sug-sub">${esc(p.cargo_atual || 'sem cargo registrado')}</div></div>
     </div>`).join('')
     : '<div style="padding:20px;font-size:13px;color:var(--tx4);">Nenhuma pessoa pesquisada corresponde. Só é possível conectar quem já tem dossiê.</div>';
+  return itens;
+}
 
+/* O modal é montado UMA vez; digitar no filtro só troca a lista. Antes o
+   oninput redesenhava o modal inteiro, inclusive o campo: a cada letra ele
+   voltava vazio e perdia o foco, e não dava para escrever. */
+function renderConexaoManual(filtro) {
+  const itens = itensConexaoManual(filtro);
   $('modal-fusao').innerHTML = `
     <div class="modal-fundo" onclick="if(event.target===this)fecharConexao()">
       <div class="modal-cx">
@@ -1411,12 +1470,13 @@ function renderConexaoManual(filtro) {
             </div>
             <span onclick="fecharConexao()" style="cursor:pointer;color:var(--tx5);font-size:20px;line-height:1;">×</span>
           </div>
-          <input class="anot-input" style="width:100%;box-sizing:border-box;margin-top:12px;" placeholder="filtrar por nome ou cargo…" oninput="renderConexaoManual(this.value)" autofocus>
+          <input class="anot-input" style="width:100%;box-sizing:border-box;margin-top:12px;" placeholder="filtrar por nome ou cargo…" oninput="$('lista-modal').innerHTML = itensConexaoManual(this.value)" autofocus>
         </div>
-        <div class="modal-lista">${itens}</div>
+        <div class="modal-lista" id="lista-modal">${itens}</div>
       </div>
     </div>`;
   $('modal-fusao').style.display = 'block';
+  const campo = $('modal-fusao').querySelector('input'); if (campo) campo.focus();
 }
 
 function selecionarParaConexao(outroId, outroNome) {
@@ -1487,19 +1547,36 @@ async function abrirFusao(pessoaId, nome) {
   renderFusao('');
 }
 
-function renderFusao(filtro) {
+/* Palavras do nome sem acento, para comparar "Lula" com "Luiz Inácio Lula da Silva". */
+function tokensNome(n) {
+  return (n || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase()
+    .split(/[^a-z]+/).filter(t => t.length > 1 && !['de','da','do','das','dos'].includes(t));
+}
+function itensFusao(filtro) {
   const f = (filtro || '').toLowerCase();
+  const alvo = tokensNome(fusaoNo.nome);
+  const parecido = p => tokensNome(p.nome).filter(t => alvo.includes(t)).length;
   const candidatos = (estado.acervo || [])
     .filter(p => p.pessoa_id !== fusaoNo.id)
-    .filter(p => !f || p.nome.toLowerCase().includes(f) || (p.cargo_atual || '').toLowerCase().includes(f));
+    .filter(p => !f || p.nome.toLowerCase().includes(f) || (p.cargo_atual || '').toLowerCase().includes(f))
+    // Nomes que compartilham palavras com o nó vêm primeiro: para "Lula",
+    // "Luiz Inácio Lula da Silva" aparece no topo sem precisar digitar.
+    .map(p => ({ p, n: parecido(p) }))
+    .sort((a, b) => b.n - a.n)
+    .map(x => Object.assign({}, x.p, { _parecido: x.n > 0 }));
   const itens = candidatos.length ? candidatos.map(p => `
     <div class="sug-item" onclick="confirmarFusao(${p.pessoa_id}, '${esc(p.nome)}')">
       <div class="sug-avatar">${p.foto_url ? `<img src="${esc(p.foto_url)}" onerror="this.remove()" alt="">` : ''}<span style="position:absolute;">${p.foto_url ? '' : iniciais(p.nome)}</span></div>
       <div style="min-width:0;"><div class="sug-nome">${esc(p.nome)}</div><div class="sug-sub">${esc(p.cargo_atual || 'sem cargo registrado')}</div></div>
-      ${p.tem_briefing ? '<span class="badge-pronto">dossiê pronto</span>' : ''}
+      ${p._parecido ? '<span class="badge-li" style="color:var(--ac);">nome parecido</span>' : ''}
+      ${p.tem_briefing ? '<span class="badge-pronto"' + (p._parecido ? ' style="margin-left:8px;"' : '') + '>dossiê pronto</span>' : ''}
     </div>`).join('')
     : '<div style="padding:20px;font-size:13px;color:var(--tx4);">Nenhuma pessoa no acervo corresponde à busca.</div>';
+  return itens;
+}
 
+function renderFusao(filtro) {
+  const itens = itensFusao(filtro);
   $('modal-fusao').innerHTML = `
     <div class="modal-fundo" onclick="if(event.target===this)fecharFusao()">
       <div class="modal-cx">
@@ -1511,12 +1588,13 @@ function renderFusao(filtro) {
             </div>
             <span onclick="fecharFusao()" style="cursor:pointer;color:var(--tx5);font-size:20px;line-height:1;">×</span>
           </div>
-          <input class="anot-input" style="width:100%;box-sizing:border-box;margin-top:12px;" placeholder="filtrar por nome ou cargo…" oninput="renderFusao(this.value)" autofocus>
+          <input class="anot-input" style="width:100%;box-sizing:border-box;margin-top:12px;" placeholder="filtrar por nome ou cargo…" oninput="$('lista-modal').innerHTML = itensFusao(this.value)" autofocus>
         </div>
-        <div class="modal-lista">${itens}</div>
+        <div class="modal-lista" id="lista-modal">${itens}</div>
       </div>
     </div>`;
   $('modal-fusao').style.display = 'block';
+  const campo = $('modal-fusao').querySelector('input'); if (campo) campo.focus();
 }
 
 function fecharFusao() { $('modal-fusao').style.display = 'none'; $('modal-fusao').innerHTML = ''; fusaoNo = null; }
@@ -1562,6 +1640,147 @@ async function excluirPessoa(pessoaId, nome) {
     alert('Não foi possível excluir: ' + e.message);
     return false;
   }
+}
+
+// ---------- foto do dossiê (com troca manual) ----------
+function renderFotoDossie(pes) {
+  // foto com fallback de iniciais; o link abaixo abre a troca manual
+  $('dos-foto').innerHTML = `<div style="display:flex;flex-direction:column;align-items:center;gap:6px;">
+    <div style="width:100px;height:100px;border-radius:50%;background:linear-gradient(135deg,rgba(255,178,92,0.25),rgba(224,109,16,0.25));border:2px solid var(--bd4);display:flex;align-items:center;justify-content:center;font-size:32px;font-weight:800;color:#fff;overflow:hidden;position:relative;">
+      <span>${iniciais(pes.nome)}</span>${pes.foto_url ? `<img src="${esc(pes.foto_url)}" onerror="this.remove()" style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover;" alt="">` : ''}</div>
+    <a href="#" class="no-print" onclick="abrirTrocaFoto();return false;" style="font-size:11.5px;color:var(--tx5);">${pes.foto_url ? 'trocar foto' : 'adicionar foto'}</a>
+  </div>`;
+}
+
+function abrirTrocaFoto() {
+  if (!estado.perfil) return;
+  const pes = estado.perfil.pessoa;
+  $('modal-fusao').innerHTML = `
+    <div class="modal-fundo" onclick="if(event.target===this)fecharTrocaFoto()">
+      <div class="modal-cx">
+        <div class="modal-cab">
+          <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;">
+            <div style="font-size:16px;font-weight:800;">Foto de ${esc(pes.nome)}</div>
+            <span onclick="fecharTrocaFoto()" style="cursor:pointer;color:var(--tx5);font-size:20px;line-height:1;">×</span>
+          </div>
+          <div style="font-size:12.5px;color:var(--tx4);margin-top:6px;">Quando o LinkedIn esconde a foto, a coleta procura um retrato na imprensa. Se não achar, ou achar um ruim, escolha aqui.</div>
+        </div>
+        <div style="padding:16px 22px 20px;display:flex;flex-direction:column;gap:14px;">
+          <div>
+            <div style="font-size:11px;font-weight:800;letter-spacing:0.1em;text-transform:uppercase;color:var(--tx5);margin-bottom:5px;">Endereço da imagem</div>
+            <div style="display:flex;gap:8px;">
+              <input id="tf-url" class="anot-input" style="flex:1;min-width:0;box-sizing:border-box;" placeholder="https://… (botão direito na foto → Copiar endereço da imagem)" onkeydown="if(event.key==='Enter')salvarFotoUrl()" autofocus>
+              <button class="btn-solido" style="padding:8px 16px;font-size:13px;" onclick="salvarFotoUrl()">Usar</button>
+            </div>
+          </div>
+          <div>
+            <div style="font-size:11px;font-weight:800;letter-spacing:0.1em;text-transform:uppercase;color:var(--tx5);margin-bottom:5px;">Ou envie um arquivo</div>
+            <input id="tf-arquivo" type="file" accept="image/jpeg,image/png,image/webp" onchange="enviarFotoArquivo(this)" style="font-size:12.5px;color:var(--tx3);">
+          </div>
+          <div id="tf-status" style="font-size:12px;display:none;"></div>
+        </div>
+      </div>
+    </div>`;
+  $('modal-fusao').style.display = 'block';
+}
+
+function fecharTrocaFoto() { $('modal-fusao').style.display = 'none'; $('modal-fusao').innerHTML = ''; }
+
+function statusTrocaFoto(msg, erro) {
+  const st = $('tf-status');
+  st.textContent = msg; st.style.display = 'block';
+  st.style.color = erro ? 'var(--neg)' : 'var(--tx5)';
+}
+
+async function aplicarNovaFoto(resposta) {
+  estado.perfil.pessoa.foto_url = resposta.foto_url;
+  renderFotoDossie(estado.perfil.pessoa);
+  fecharTrocaFoto();
+}
+
+async function salvarFotoUrl() {
+  const url = $('tf-url').value.trim();
+  if (!/^https?:\/\//i.test(url)) { statusTrocaFoto('Cole um endereço que comece com http:// ou https://', true); return; }
+  statusTrocaFoto('baixando a imagem…');
+  try {
+    const r = await fetchJSON(`${API_BASE}/perfil/${estado.perfil.pessoa.id}/foto`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ url })
+    });
+    await aplicarNovaFoto(r);
+  } catch (e) { statusTrocaFoto(e.message, true); }
+}
+
+async function enviarFotoArquivo(input) {
+  const arq = input.files && input.files[0];
+  if (!arq) return;
+  if (arq.size > 5 * 1024 * 1024) { statusTrocaFoto('Arquivo acima de 5 MB.', true); return; }
+  statusTrocaFoto('enviando…');
+  const fd = new FormData();
+  fd.append('arquivo', arq);
+  try {
+    const r = await fetchJSON(`${API_BASE}/perfil/${estado.perfil.pessoa.id}/foto/arquivo`, { method: 'POST', body: fd });
+    await aplicarNovaFoto(r);
+  } catch (e) { statusTrocaFoto(e.message, true); }
+}
+
+/* Vincula um LinkedIn a quem já está no acervo (ex.: dossiê montado só pela
+   imprensa). Colar o link na busca não servia: se o Google não indexou o
+   perfil, o nome vem do endereço ("Pabloscesario") e nascia OUTRA pessoa.
+   Aqui o nome é o do dossiê aberto, então o registro certo é enriquecido
+   e as matérias e conexões ficam onde estão. */
+function abrirVincularLinkedin() {
+  if (!estado.perfil) return;
+  const pes = estado.perfil.pessoa;
+  const busca = 'https://www.linkedin.com/search/results/people/?keywords=' + encodeURIComponent(pes.nome);
+  $('modal-fusao').innerHTML = `
+    <div class="modal-fundo" onclick="if(event.target===this)fecharTrocaFoto()">
+      <div class="modal-cx">
+        <div class="modal-cab">
+          <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;">
+            <div style="font-size:16px;font-weight:800;">LinkedIn de <span style="color:var(--ac);">${esc(pes.nome)}</span></div>
+            <span onclick="fecharTrocaFoto()" style="cursor:pointer;color:var(--tx5);font-size:20px;line-height:1;">×</span>
+          </div>
+          <div style="font-size:12.5px;color:var(--tx4);margin-top:6px;line-height:1.5;">Cole o link do perfil. A coleta roda de novo e acrescenta trajetória, formação e foto ao dossiê; as matérias e as conexões continuam. Não achou? <a href="${busca}" target="_blank" rel="noopener">procurar no LinkedIn ↗</a></div>
+        </div>
+        <div style="padding:16px 22px 20px;display:flex;flex-direction:column;gap:12px;">
+          <input id="vl-url" class="anot-input" style="width:100%;box-sizing:border-box;" placeholder="https://www.linkedin.com/in/…" onkeydown="if(event.key==='Enter')confirmarVincularLinkedin()">
+          <div id="vl-erro" style="font-size:12px;color:var(--neg);display:none;"></div>
+          <div style="display:flex;gap:8px;justify-content:flex-end;">
+            <button class="btn-ctl" onclick="fecharTrocaFoto()">Cancelar</button>
+            <button class="btn-solido" style="padding:8px 20px;font-size:13px;" onclick="confirmarVincularLinkedin()">Vincular e coletar</button>
+          </div>
+        </div>
+      </div>
+    </div>`;
+  $('modal-fusao').style.display = 'block';
+  $('vl-url').focus();
+}
+
+function confirmarVincularLinkedin() {
+  const url = $('vl-url').value.trim();
+  if (!/linkedin\.com\/in\/[^\/?#\s]+/i.test(url)) {
+    const e = $('vl-erro');
+    e.textContent = 'Use o link de um perfil, no formato linkedin.com/in/usuario.';
+    e.style.display = 'block';
+    return;
+  }
+  const pes = estado.perfil.pessoa;
+  fecharTrocaFoto();
+  estado.selecao = { nome: pes.nome, headline: pes.cargo_atual, linkedin_url: url, pessoa_id: pes.id, local: false };
+  estado.forcarProxima = true;
+  executarColeta();
+}
+
+async function desvincularIdentidade() {
+  if (!estado.perfil) return;
+  const pes = estado.perfil.pessoa;
+  const ok = window.confirm(`Desvincular o LinkedIn de ${pes.nome}?\n\nSaem o perfil, os cargos, a foto e o briefing coletados dele. As matérias e as conexões do grafo ficam. Em seguida você escolhe o perfil certo, ou coleta só pela imprensa.`);
+  if (!ok) return;
+  try {
+    const r = await fetchJSON(`${API_BASE}/perfil/${pes.id}/desvincular`, { method: 'POST' });
+    carregarAcervo();
+    pesquisarDoGrafo(pes.nome, r.contexto_origem || '', null);
+  } catch (e) { alert(e.message); }
 }
 
 async function excluirDossieAtual() {

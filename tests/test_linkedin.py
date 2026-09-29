@@ -281,6 +281,18 @@ def db():
     session.close()
 
 
+def _pessoa_confirmada(db) -> Pessoa:
+    """Pessoa com LinkedIn escolhido pelo analista (o worker não descobre mais)."""
+    p = Pessoa(
+        nome="Eduardo Bartolomeo", slug="eduardo-bartolomeo",
+        linkedin_url="https://www.linkedin.com/in/eduardobartolomeo",
+        identidade_confirmada=True,
+    )
+    db.add(p)
+    db.commit()
+    return p
+
+
 def _rodar_job(db, termo="Eduardo Bartolomeo") -> JobColeta:
     job = JobColeta(termo_busca=termo)
     db.add(job)
@@ -290,18 +302,14 @@ def _rodar_job(db, termo="Eduardo Bartolomeo") -> JobColeta:
     return db.get(JobColeta, job.id)
 
 
-def test_worker_descobre_coleta_e_persiste(db, monkeypatch):
+def test_worker_coleta_linkedin_confirmado_e_persiste(db, monkeypatch):
     chamadas = {"apify": 0}
 
     def coletar_falso(url):
         chamadas["apify"] += 1
         return PERFIL_BRUTO
 
-    monkeypatch.setattr(
-        busca_worker,
-        "descobrir_linkedin_url",
-        lambda nome, ctx=None: "https://www.linkedin.com/in/eduardobartolomeo",
-    )
+    _pessoa_confirmada(db)
     monkeypatch.setattr(busca_worker, "coletar_perfil_linkedin", coletar_falso)
 
     job = _rodar_job(db)
@@ -328,11 +336,7 @@ def test_worker_descobre_coleta_e_persiste(db, monkeypatch):
 
 
 def test_worker_ttl_evita_recoleta_e_nao_duplica_cargos(db, monkeypatch):
-    monkeypatch.setattr(
-        busca_worker,
-        "descobrir_linkedin_url",
-        lambda nome, ctx=None: "https://www.linkedin.com/in/eduardobartolomeo",
-    )
+    _pessoa_confirmada(db)
     chamadas = {"apify": 0}
 
     def coletar_falso(url):
@@ -351,11 +355,7 @@ def test_worker_ttl_evita_recoleta_e_nao_duplica_cargos(db, monkeypatch):
 
 
 def test_worker_recoleta_apos_ttl_expirar(db, monkeypatch):
-    monkeypatch.setattr(
-        busca_worker,
-        "descobrir_linkedin_url",
-        lambda nome, ctx=None: "https://www.linkedin.com/in/eduardobartolomeo",
-    )
+    _pessoa_confirmada(db)
     chamadas = {"apify": 0}
 
     def coletar_falso(url):
@@ -376,8 +376,12 @@ def test_worker_recoleta_apos_ttl_expirar(db, monkeypatch):
 
 
 def test_worker_sem_linkedin_segue_normal(db, monkeypatch):
-    """Descoberta falhou: job conclui sem enriquecimento e sem briefing."""
-    monkeypatch.setattr(busca_worker, "descobrir_linkedin_url", lambda nome, ctx=None: None)
+    """Sem LinkedIn confirmado: NÃO tenta descobrir (homônimo) e conclui só com imprensa."""
+    from app.services.collectors import apify_linkedin
+
+    monkeypatch.setattr(
+        apify_linkedin, "descobrir_linkedin_url", lambda *a, **k: pytest.fail("não deveria descobrir")
+    )
     monkeypatch.setattr(
         busca_worker, "coletar_perfil_linkedin", lambda url: pytest.fail("não deveria coletar")
     )

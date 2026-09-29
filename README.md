@@ -62,7 +62,7 @@ O produto responde a quatro perguntas que um analista precisa responder antes de
 ```
 ┌──────────────┐   HTTP    ┌──────────────┐         ┌─────────────┐
 │  index_v2    │ ────────▶ │   FastAPI    │ ──────▶ │  PostgreSQL │
-│  (browser)   │ ◀──────── │  (11 rotas)  │ ◀────── │             │
+│  (browser)   │ ◀──────── │  (12 rotas)  │ ◀────── │             │
 └──────────────┘           └──────┬───────┘         └──────▲──────┘
                                   │ enfileira              │
                                   ▼                        │
@@ -91,7 +91,7 @@ A coleta roda **assíncrona**: a API devolve `job_id` e o frontend faz polling. 
 1. **Identidade confirmada** — o analista escolhe o perfil do LinkedIn nas sugestões (ou cola a URL). Pessoa nova sem essa confirmação é rejeitada com `422`.
 2. **Imprensa** — SerpAPI restrito a 10 portais brasileiros (Valor, Estadão, Folha, O Globo, Exame, InfoMoney, NeoFeed, Veja, IstoÉ Dinheiro, Brazilian Report). Descarta páginas-índice ("Tudo sobre…") e normaliza URLs removendo parâmetros de rastreamento.
 3. **Leitura das matérias** — `leitor_artigo` baixa o corpo do texto (até 4.000 caracteres) e extrai a **assinatura**. Manchete de economia raramente cita pessoas; o corpo é onde o grafo nasce.
-4. **LinkedIn** — Apify (`apimaestro/linkedin-profile-detail`) traz trajetória, formação, bio, foto e localização. Payload bruto fica em cache por 30 dias.
+4. **LinkedIn** — Apify (`apimaestro/linkedin-profile-detail`) traz trajetória, formação, bio, foto e localização. Payload bruto fica em cache por 30 dias — exceto quando a URL assinada da foto já venceu (a CDN do LinkedIn expira em semanas), caso em que vale pagar a recoleta. A imagem é baixada na coleta e servida por `GET /foto/{id}`, então o dossiê não perde a foto com o tempo.
 5. **Extração (IA)** — cada matéria passa por Claude Sonnet com `tool_use`: o modelo preenche um formulário fixo (pessoas relacionadas com descritor, empresas, eventos, valores, temas, sentimento, papel da pessoa no texto, se é lista/ranking). Não escreve texto livre — preenche campos.
 6. **Grafo** — co-menções viram arestas; o inferidor formal cruza cargos com períodos sobrepostos.
 7. **Síntese (IA)** — só depois de tudo estruturado, o modelo escreve o briefing de 3 parágrafos a partir do **estado completo do banco** (não apenas do lote coletado agora).
@@ -205,6 +205,7 @@ Documentação interativa em `/docs`. Contrato detalhado em [`frontend/CONTRATO_
 | `PATCH /grafo/relacao/{id}` | Anota ou oculta uma conexão |
 | `PUT /grafo/{id}/layout` | Salva (ou limpa) a disposição do grafo arrumada pelo analista |
 | `GET /acervo` | Lista os executivos já pesquisados |
+| `GET /foto/{id}` | Foto de perfil (cópia local, não expira) |
 | `GET /` | Health check |
 
 ---
@@ -227,6 +228,7 @@ CEO_Mais/
 │   │   ├── llm/                    # extrator, sintetizador
 │   │   ├── graph/                  # construtor, queries, inferidor_formal
 │   │   ├── manutencao.py           # fusão, exclusão, aliases
+│   │   ├── fotos.py                # cópia local da foto (URL do LinkedIn expira)
 │   │   └── cache.py
 │   └── workers/busca_worker.py     # pipeline completo
 ├── frontend/
@@ -235,7 +237,7 @@ CEO_Mais/
 │   └── exemplo_*.json
 ├── migrations/versions/            # 7 migrations
 ├── scripts/                        # checar_ambiente.py, rodar_worker.py
-└── tests/                          # 125 testes
+└── tests/                          # 137 testes
 ```
 
 ---
@@ -275,7 +277,7 @@ Abra `frontend/index_v2.html` direto no navegador — o CORS está liberado para
 - **Mudou código do worker → reinicie o worker.** O `--reload` do uvicorn só cobre a API.
 - **Um worker por vez.** Workers esquecidos em outros terminais disputam a fila e processam com código velho. O worker loga `pipeline vAAAA-MM-DD.N` no startup e em cada job — se a versão não bater, há processo antigo vivo.
 - **Redis parado?** No Windows: `Start-Service Memurai` como administrador.
-- **Testes:** `pytest` — 125 testes com SQLite em memória e mocks; não gastam API nem exigem Postgres/Redis.
+- **Testes:** `pytest` — 137 testes com SQLite em memória e mocks; não gastam API nem exigem Postgres/Redis.
 
 ---
 

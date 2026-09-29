@@ -15,6 +15,7 @@ from app.models.evento import evento_participante
 from app.models.mencao import Mencao
 from app.models.pessoa import Pessoa
 from app.models.relacao import Relacao
+from app.services.fotos import remover_foto
 
 # Tipos de relação simétricos seguem a convenção pessoa_a_id < pessoa_b_id
 TIPOS_SIMETRICOS = {"co_mencionado", "co_evento", "co_board", "colega_empresa", "manual"}
@@ -249,6 +250,7 @@ def excluir_pessoa(db: Session, pessoa: Pessoa, limpar_orfaos: bool = True) -> d
     (pessoas criadas a partir de co-menções e que ficaram sem nenhum vínculo).
     """
     nome = pessoa.nome
+    remover_foto(pessoa.id)
     # Candidatos a órfão: quem estava ligado a esta pessoa no grafo.
     vizinhos_ids: set[int] = set()
     if limpar_orfaos:

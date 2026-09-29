@@ -8,7 +8,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from loguru import logger
 
-from app.api import acervo, busca, grafo, job, perfil, sugestoes
+from app.api import acervo, busca, foto, grafo, job, perfil, sugestoes
 from app.core.config import settings
 
 app = FastAPI(
@@ -32,6 +32,7 @@ app.include_router(grafo.router)
 app.include_router(job.router)
 app.include_router(sugestoes.router)
 app.include_router(acervo.router)
+app.include_router(foto.router)
 
 
 @app.get("/", tags=["health"])

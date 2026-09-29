@@ -76,7 +76,6 @@ def preparar(monkeypatch):
     monkeypatch.setattr(busca_worker, "extrair", lambda texto, ctx: EXTRACAO_FALSA)
     monkeypatch.setattr(busca_worker, "sintetizar", lambda dados: BRIEFING_FALSO)
     monkeypatch.setattr(busca_worker, "coletar_perfil_linkedin", lambda url: None)
-    monkeypatch.setattr(busca_worker, "descobrir_linkedin_url", lambda nome, ctx=None: None)
     monkeypatch.setattr(busca_worker, "baixar_artigo", lambda url: None)
     yield
     Base.metadata.drop_all(engine)

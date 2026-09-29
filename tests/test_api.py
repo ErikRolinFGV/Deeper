@@ -110,6 +110,7 @@ def test_busca_retorna_cache_hit_para_perfil_fresco(client, db):
     pessoa = Pessoa(
         slug="eduardo-bartolomeo",
         nome="Eduardo Bartolomeo",
+        identidade_confirmada=True,
         atualizado_em=datetime.now(timezone.utc),
     )
     db.add(pessoa)
@@ -126,6 +127,7 @@ def test_busca_recoleta_perfil_velho(client, db):
     pessoa = Pessoa(
         slug="eduardo-bartolomeo",
         nome="Eduardo Bartolomeo",
+        identidade_confirmada=True,
         atualizado_em=datetime.now(timezone.utc) - timedelta(days=30),
     )
     db.add(pessoa)
@@ -142,6 +144,7 @@ def test_busca_force_refresh_ignora_cache(client, db):
         Pessoa(
             slug="eduardo-bartolomeo",
             nome="Eduardo Bartolomeo",
+            identidade_confirmada=True,
             atualizado_em=datetime.now(timezone.utc),
         )
     )
@@ -248,3 +251,38 @@ def test_grafo_pessoa_isolada_retorna_so_a_raiz(client, db):
     assert no["id"] == p.id and no["label"] == "Isolado" and no["raiz"] is True
     assert no["identidade_confirmada"] is False and no["tem_dossie"] is False
     assert corpo["edges"] == []
+
+
+# ---------- troca manual de foto ----------
+
+
+def test_trocar_foto_por_url_e_por_arquivo(client, db, monkeypatch, tmp_path):
+    from app.api import perfil as perfil_api
+    from app.services import fotos
+
+    monkeypatch.setattr(fotos, "DIR_FOTOS", tmp_path)
+    p = Pessoa(nome="Maria Antonietta Russo", slug="maria-antonietta-russo")
+    db.add(p)
+    db.commit()
+
+    # URL que não é imagem: erro explicativo, nada muda.
+    monkeypatch.setattr(perfil_api, "guardar_foto", lambda pid, url: False)
+    r = client.post(f"/perfil/{p.id}/foto", json={"url": "https://site.com/pagina"})
+    assert r.status_code == 400
+    assert client.post(f"/perfil/{p.id}/foto", json={"url": "ftp://x/y.jpg"}).status_code == 400
+
+    monkeypatch.setattr(perfil_api, "guardar_foto", lambda pid, url: True)
+    r = client.post(f"/perfil/{p.id}/foto", json={"url": "https://exame.com/Maria-Russo.jpg"})
+    assert r.status_code == 200
+    db.expire_all()
+    assert db.get(Pessoa, p.id).foto_url == "https://exame.com/Maria-Russo.jpg"
+
+    png = b"\x89PNG\r\n\x1a\n" + b"0" * 40
+    r = client.post(f"/perfil/{p.id}/foto/arquivo", files={"arquivo": ("f.png", png, "image/png")})
+    assert r.status_code == 200
+    assert f"/foto/{p.id}?v=" in r.json()["foto_url"]
+    assert (tmp_path / f"{p.id}.png").read_bytes() == png
+
+    r = client.post(f"/perfil/{p.id}/foto/arquivo", files={"arquivo": ("a.txt", b"oi", "text/plain")})
+    assert r.status_code == 400
+    assert client.post("/perfil/9999/foto", json={"url": "https://x.com/a.jpg"}).status_code == 404

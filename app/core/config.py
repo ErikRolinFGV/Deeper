@@ -38,5 +38,10 @@ class Settings(BaseSettings):
     LOG_LEVEL: str = "INFO"
     CACHE_TTL_DAYS: int = 7
 
+    # Mídia: as fotos do LinkedIn vêm de URL assinada que expira, então
+    # guardamos uma cópia local e servimos por /foto/{id}.
+    DIR_MEDIA: str = "media"
+    API_BASE_URL: str = "http://localhost:8000"
+
 
 settings = Settings()

@@ -18,6 +18,7 @@ from app.services.collectors.apify_linkedin import (
     resolver_perfil_por_url,
     sugerir_perfis_linkedin,
 )
+from app.services.fotos import foto_publica
 
 router = APIRouter(prefix="/sugestoes", tags=["sugestoes"])
 
@@ -27,10 +28,11 @@ def _serializar(p: Pessoa) -> dict:
         "pessoa_id": p.id,
         "nome": p.nome,
         "cargo_atual": p.cargo_atual,
-        "foto_url": p.foto_url,
+        "foto_url": foto_publica(p),
         "tem_briefing": p.briefing is not None,
         "contexto_origem": p.contexto_origem,
         "identidade_confirmada": bool(p.identidade_confirmada),
+        "tem_linkedin": bool(p.linkedin_url),
     }
 
 
@@ -42,7 +44,8 @@ def sugerir(
         None, max_length=160,
         description=(
             "Pistas de identidade (cargo/empresa/vínculo) vindas do grafo. "
-            "Entram só na busca do LinkedIn, para trazer o homônimo certo."
+            "Presente (mesmo vazio) = pessoa vinda do grafo: só entram "
+            "candidatos do LinkedIn com o mesmo nome, ordenados pelas pistas."
         ),
     ),
     db: Session = Depends(get_db),
@@ -80,8 +83,8 @@ def sugerir(
         "por_url": False,
         "locais": [_serializar(p) for p in locais],
         "linkedin": (
-            sugerir_perfis_linkedin(f"{q} {contexto}".strip() if contexto else q)
-            if externas
-            else []
+            sugerir_perfis_linkedin(q, nome_exigido=q.strip(), contexto=contexto)
+            if externas and contexto is not None
+            else sugerir_perfis_linkedin(q) if externas else []
         ),
     }

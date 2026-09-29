@@ -12,6 +12,7 @@ from app.core.db import get_db
 from app.models.pessoa import Pessoa
 from app.models.relacao import Relacao
 from app.services.graph.queries import vizinhos_em_profundidade
+from app.services.fotos import foto_publica
 
 router = APIRouter(prefix="/grafo", tags=["grafo"])
 
@@ -211,7 +212,7 @@ def obter_grafo(
                 "id": node_id,
                 "label": p.nome if p else f"#{node_id}",
                 "cargo_atual": p.cargo_atual if p else None,
-                "foto_url": p.foto_url if p else None,
+                "foto_url": foto_publica(p) if p else None,
                 "raiz": node_id == pessoa_id,
                 # Identidade: quem nunca foi pesquisado é só um nome extraído
                 # de uma matéria — o descritor diz de qual pessoa se tratava.

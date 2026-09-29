@@ -13,6 +13,14 @@ class BuscaRequest(BaseModel):
             "Quando presente, o worker pula a descoberta — elimina homônimos."
         ),
     )
+    somente_imprensa: bool = Field(
+        False,
+        description=(
+            "O analista confirma que a pessoa (já no acervo, vinda do grafo) é "
+            "a descrita pela imprensa e que ela não tem LinkedIn público: a "
+            "coleta usa só as matérias."
+        ),
+    )
 
 
 class BuscaResponse(BaseModel):

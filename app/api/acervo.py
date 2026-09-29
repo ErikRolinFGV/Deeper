@@ -10,6 +10,7 @@ from sqlalchemy.orm import Session
 
 from app.core.db import get_db
 from app.models.pessoa import Pessoa
+from app.services.fotos import foto_publica
 
 router = APIRouter(prefix="/acervo", tags=["acervo"])
 
@@ -34,7 +35,7 @@ def listar_acervo(
                 "pessoa_id": p.id,
                 "nome": p.nome,
                 "cargo_atual": p.cargo_atual,
-                "foto_url": p.foto_url,
+                "foto_url": foto_publica(p),
                 "tem_briefing": p.briefing is not None,
                 "identidade_confirmada": bool(p.identidade_confirmada),
                 "atualizado_em": p.atualizado_em.isoformat() if p.atualizado_em else None,
