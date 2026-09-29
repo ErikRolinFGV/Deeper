@@ -229,8 +229,6 @@ Documentação interativa em `/docs`. Contrato detalhado em [`frontend/CONTRATO_
 ```
 Deeper/
 ├── README.md
-├── CLAUDE.md                       # instruções para o Claude Code
-├── ROTEIRO_APRESENTACAO_FSB.md     # roteiro da apresentação
 ├── requirements.txt · alembic.ini · .env
 ├── app/
 │   ├── main.py                     # FastAPI + CORS

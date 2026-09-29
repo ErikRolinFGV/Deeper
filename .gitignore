@@ -53,3 +53,10 @@ media/
 
 # Saidas temporarias de teste
 .tmp_teste/
+
+# Documentos internos e instruções locais (não vão para o repositório público)
+CLAUDE.md
+Deeper_Roteiro_Reuniao_Miguel.docx
+Documentacao_Tecnica_FSB.pdf
+ROTEIRO_APRESENTACAO_FSB.md
+fsb-tech-doc.pdf
