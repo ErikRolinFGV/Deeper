@@ -39,15 +39,18 @@ O produto responde a quatro perguntas que um analista precisa responder antes de
 |---|---|
 | Pipeline | Completo, ponta a ponta, com dossiês reais no banco |
 | Frontend | `frontend/index_v2.html` — arquivo único, integrado à API |
-| Testes | **125 automatizados** (`pytest`, sem tocar em API externa) |
+| Testes | **157 automatizados** (`pytest`, sem tocar em API externa) |
 | Migrations | 7 (última: `e5f6a7b8c9d0`) |
-| Versão do pipeline | Logada no startup do worker (`PIPELINE_VERSAO`) |
+| Versão do pipeline | `2026-09-28.3`, logada no startup do worker (`PIPELINE_VERSAO`) |
+| Última atualização | 29/09/2026: fotos que não expiram, fallback de foto pela imprensa, fluxo "só imprensa", desvincular identidade, Google Notícias como fonte principal e extração paralela |
 
 ---
 
 ## O que a ferramenta faz
 
 **Busca com identidade confirmada.** O analista digita nome, cargo, empresa (*"CEO do Nubank"*) ou cola um link do LinkedIn. A busca **não** dispara coleta: abre um painel com quem já está no acervo e candidatos reais do LinkedIn, com headline de cada um. A coleta só começa quando o analista aponta quem é — é o que impede que o dossiê nasça de um homônimo.
+
+**Só imprensa, quando não há LinkedIn.** Muito executivo de alto escalão não tem perfil público indexado. Para quem já está no acervo (normalmente alguém que apareceu no grafo), o analista pode declarar "coletar só pela imprensa": o dossiê sai das matérias. Se o LinkedIn aparecer depois, "+ vincular LinkedIn" no cabeçalho acrescenta trajetória e foto sem perder matérias nem conexões.
 
 **Dossiê.** Ficha (foto, cargo atual, localização, LinkedIn), briefing executivo de 3 parágrafos, trajetória profissional em linha do tempo, menções na imprensa com sentimento (−1 a +1) e temas, eventos, e o grafo.
 
@@ -62,7 +65,7 @@ O produto responde a quatro perguntas que um analista precisa responder antes de
 ```
 ┌──────────────┐   HTTP    ┌──────────────┐         ┌─────────────┐
 │  index_v2    │ ────────▶ │   FastAPI    │ ──────▶ │  PostgreSQL │
-│  (browser)   │ ◀──────── │  (12 rotas)  │ ◀────── │             │
+│  (browser)   │ ◀──────── │  (16 rotas)  │ ◀────── │             │
 └──────────────┘           └──────┬───────┘         └──────▲──────┘
                                   │ enfileira              │
                                   ▼                        │
@@ -78,8 +81,10 @@ O produto responde a quatro perguntas que um analista precisa responder antes de
         ┌─────────────┬───────────┼────────────┬──────────────┐
         ▼             ▼           ▼            ▼              ▼
    SerpAPI      leitor_artigo   Apify     Claude Sonnet   inferidor
-  (imprensa)    (corpo da       (LinkedIn)  (extração +    formal
-                 matéria)                    síntese)     (cargos)
+  (Google       (corpo da       (LinkedIn)  4.6 (extração  formal
+  Notícias,      matéria)                   paralela +     (cargos)
+  sugestões,                                síntese)
+  fotos)
 ```
 
 A coleta roda **assíncrona**: a API devolve `job_id` e o frontend faz polling. Nenhuma etapa bloqueia a interface, e cada fonte é tolerante a falha — uma fonte fora do ar degrada o dossiê, não derruba o job.
@@ -88,15 +93,15 @@ A coleta roda **assíncrona**: a API devolve `job_id` e o frontend faz polling. 
 
 ## O pipeline de uma busca
 
-1. **Identidade confirmada** — o analista escolhe o perfil do LinkedIn nas sugestões (ou cola a URL). Pessoa nova sem essa confirmação é rejeitada com `422`.
-2. **Imprensa** — SerpAPI restrito a 10 portais brasileiros (Valor, Estadão, Folha, O Globo, Exame, InfoMoney, NeoFeed, Veja, IstoÉ Dinheiro, Brazilian Report). Descarta páginas-índice ("Tudo sobre…") e normaliza URLs removendo parâmetros de rastreamento.
+1. **Identidade confirmada** — o analista escolhe o perfil do LinkedIn nas sugestões (ou cola a URL). Pessoa nova sem essa confirmação é rejeitada com `422`. Pessoa que só existe como nó do grafo exige o perfil **ou** a declaração `somente_imprensa`. Não há mais descoberta automática de LinkedIn: o 1º resultado do Google trazia homônimos.
+2. **Imprensa** — busca principal no **Google Notícias** (SerpAPI `google_news`, até 30 resultados, mais recentes primeiro), que cobre também a imprensa setorial. Se vierem menos de 8 matérias, complementa com busca orgânica nos 10 portais pré-aprovados (Valor, Estadão, Folha, O Globo, Exame, InfoMoney, NeoFeed, Veja, IstoÉ Dinheiro, Brazilian Report). Descarta páginas-índice ("Tudo sobre…") e normaliza URLs removendo parâmetros de rastreamento.
 3. **Leitura das matérias** — `leitor_artigo` baixa o corpo do texto (até 4.000 caracteres) e extrai a **assinatura**. Manchete de economia raramente cita pessoas; o corpo é onde o grafo nasce.
-4. **LinkedIn** — Apify (`apimaestro/linkedin-profile-detail`) traz trajetória, formação, bio, foto e localização. Payload bruto fica em cache por 30 dias — exceto quando a URL assinada da foto já venceu (a CDN do LinkedIn expira em semanas), caso em que vale pagar a recoleta. A imagem é baixada na coleta e servida por `GET /foto/{id}`, então o dossiê não perde a foto com o tempo.
-5. **Extração (IA)** — cada matéria passa por Claude Sonnet com `tool_use`: o modelo preenche um formulário fixo (pessoas relacionadas com descritor, empresas, eventos, valores, temas, sentimento, papel da pessoa no texto, se é lista/ranking). Não escreve texto livre — preenche campos.
-6. **Grafo** — co-menções viram arestas; o inferidor formal cruza cargos com períodos sobrepostos.
+4. **LinkedIn** — Apify (`apimaestro/linkedin-profile-detail`) traz trajetória, formação, bio, foto e localização. Payload bruto fica em cache por 30 dias — exceto quando a URL assinada da foto já venceu (a CDN do LinkedIn expira em semanas), caso em que vale pagar a recoleta. A imagem é baixada na coleta e servida por `GET /foto/{id}`, então o dossiê não perde a foto com o tempo. **Sem foto no LinkedIn** (foto visível só para a rede, ou pessoa sem LinkedIn), o worker tenta um retrato publicado pela imprensa (SerpAPI Imagens, 1 busca por pessoa), aceitando só imagens com o nome da pessoa no arquivo. Nada confiável: o dossiê fica com as iniciais.
+5. **Extração (IA)** — até 30 matérias passam por Claude Sonnet 4.6 com `tool_use`, **5 em paralelo** (download + LLM em threads; a gravação no banco segue sequencial). O modelo preenche um formulário fixo (pessoas relacionadas com descritor, empresas, eventos, valores, temas, sentimento, papel da pessoa no texto, se é lista/ranking). Não escreve texto livre — preenche campos. Nomes saem **completos e canônicos** ("Lula" → "Luiz Inácio Lula da Silva"); quem só comenta o fato de fora (analista de banco, consultor ouvido) não entra.
+6. **Grafo** — co-menções viram arestas; o inferidor formal cruza cargos com períodos sobrepostos. Nome de uma palavra só é descartado, e uma variação de nome de alguém que já é conexão do alvo ("Gustavo Pimenta" × "Gustavo Rodrigues Pimenta") cai no mesmo nó e vira apelido.
 7. **Síntese (IA)** — só depois de tudo estruturado, o modelo escreve o briefing de 3 parágrafos a partir do **estado completo do banco** (não apenas do lote coletado agora).
 
-Tempo total: **20 a 60 segundos**.
+Tempo total: **cerca de 20 a 60 segundos**, dependendo de quantas matérias novas há para extrair.
 
 ---
 
@@ -125,13 +130,16 @@ Cada aresta tem tipo, peso (nº de evidências) e a lista de evidências anexada
 
 ## Curadoria humana
 
-O grafo não é só resultado de máquina: acumula conhecimento da equipe. Quatro ações do analista, todas persistidas e sobreviventes a recoletas:
+O grafo não é só resultado de máquina: acumula conhecimento da equipe. Ações do analista, todas persistidas e sobreviventes a recoletas:
 
 | Ação | Onde | Para quê |
 |---|---|---|
 | **Anotar conexão** | Card da aresta | Rótulo ("filho", "sócio") + observação livre. O rótulo aparece escrito na linha do grafo. |
 | **Marcar como incorreta** | Card da aresta | Some do grafo; o registro fica no banco para não ser ressuscitado sem ninguém ver. |
 | **Fundir entidades** | Card do nó | "Dani Braun" (imprensa) e "Daniela Braun" (LinkedIn) são a mesma pessoa. As redes se unem e o nome antigo vira **apelido**, para coletas futuras reconhecerem. |
+| **"Não é esta pessoa?"** | Cabeçalho do dossiê, ao lado do LinkedIn | O perfil coletado é de um homônimo. Saem LinkedIn, cargos, foto e briefing; matérias e conexões ficam. Depois o analista escolhe o perfil certo ou coleta só pela imprensa. |
+| **Vincular LinkedIn** | Cabeçalho de dossiê feito só pela imprensa | Acrescenta trajetória, formação e foto sem perder matérias e conexões. |
+| **Trocar foto** | Foto do dossiê | Por endereço de imagem ou envio de arquivo (JPG, PNG ou WEBP até 5 MB). Guardada localmente como as coletadas. |
 | **Criar conexão** | Botão "+ Conexão" | Vínculo que a casa conhece e a imprensa não mostrou. Exige **justificativa obrigatória** — é a evidência quando não há fonte pública. |
 | **Arrumar o grafo** | Arrastar os nós | A disposição é salva no servidor e reaparece igual na próxima abertura, para toda a equipe. "Reorganizar" descarta e recalcula. |
 
@@ -145,11 +153,14 @@ Cada uma nasceu de um erro real encontrado em teste:
 
 - **Homônimo na origem** — identidade confirmada por perfil do LinkedIn antes da coleta. Trocar o perfil de alguém que já tinha um confirmado zera o dossiê (é outra pessoa física); confirmar o perfil de um nó que nunca teve **preserva** as conexões (é enriquecimento).
 - **Homônimo na imprensa** — o extrator recebe nome + cargo e descarta matérias sobre outra pessoa com o mesmo nome.
+- **Homônimo no LinkedIn** — sem descoberta automática; nas sugestões para quem veio do grafo, só entram perfis com o mesmo primeiro nome e último sobrenome, e o descritor da imprensa apenas ordena. Se o perfil errado passar, "não é esta pessoa?" desfaz sem perder a imprensa.
+- **Nó duplicado** — nomes canônicos no extrator, descarte de nome de uma palavra e unificação de variações entre as conexões já existentes.
+- **Foto de outra pessoa** — retrato da imprensa só é aceito com o nome da pessoa no arquivo; na dúvida, iniciais.
 - **Matéria assinada pela pessoa** — detecção de byline (meta tags, `rel="author"`, "Por Fulano") + veredito do LLM. Um executivo ex-jornalista não vira "conexão" de todo mundo sobre quem escreveu, e o sentimento dessas matérias fica fora do briefing.
 - **Listas e rankings** — rótulo do LLM + heurística de fan-out (6+ pessoas citadas juntas).
 - **Datas** — vêm da URL e dos metadados, nunca do texto interpretado (evita registrar data de posse como data da matéria).
 - **Higienização automática** — a cada busca: remove páginas-índice, funde matérias duplicadas por parâmetros de rastreamento, preenche datas faltantes.
-- **Auto-recuperação** — menções que ficaram sem extração (falha de API no meio) voltam para a fila na próxima busca.
+- **Auto-recuperação** — menções que ficaram sem extração (falha de API no meio) voltam para a fila na próxima busca, as mais recentes primeiro. Um item malformado devolvido pelo modelo é corrigido em vez de invalidar a extração inteira.
 - **Cache de custo** — dossiê 7 dias, perfil do LinkedIn 30 dias.
 
 ---
@@ -158,14 +169,14 @@ Cada uma nasceu de um erro real encontrado em teste:
 
 | Camada | Ferramenta |
 |---|---|
-| Linguagem | Python 3.11+ |
+| Linguagem | Python 3.11+ (desenvolvido em 3.14) |
 | API | FastAPI + Pydantic v2 |
 | Banco | PostgreSQL + SQLAlchemy 2 |
 | Migrations | Alembic |
 | Fila | Redis + RQ |
-| LLM | Anthropic SDK (Claude Sonnet) |
+| LLM | Anthropic SDK (`claude-sonnet-4-6`) |
 | LinkedIn | Apify SDK |
-| Busca | SerpAPI |
+| Busca | SerpAPI (Google Notícias, Google orgânico, Google Imagens) |
 | Leitura de matérias | httpx + BeautifulSoup |
 | Frontend | HTML/CSS/JS em arquivo único + Cytoscape.js |
 | Testes | pytest |
@@ -195,10 +206,13 @@ Documentação interativa em `/docs`. Contrato detalhado em [`frontend/CONTRATO_
 | Rota | Função |
 |---|---|
 | `GET /sugestoes?q=&externas=&contexto=` | Candidatos do acervo + LinkedIn. Detecta URL colada |
-| `POST /busca` | Inicia coleta (exige `linkedin_url` para pessoa nova) → `job_id` |
+| `POST /busca` | Inicia coleta (exige `linkedin_url` para pessoa nova; aceita `somente_imprensa` para nó do grafo) → `job_id` |
 | `GET /job/{id}` | Status da coleta (`queued`/`running`/`done`/`failed`) |
 | `GET /perfil/{id}` | Dossiê completo |
 | `DELETE /perfil/{id}` | Remove a pessoa e dados derivados |
+| `POST /perfil/{id}/desvincular` | "Não é esta pessoa": remove o que veio do LinkedIn e preserva imprensa e grafo |
+| `POST /perfil/{id}/foto` | Troca a foto por uma URL de imagem |
+| `POST /perfil/{id}/foto/arquivo` | Troca a foto por arquivo enviado (até 5 MB) |
 | `POST /perfil/{id}/fundir` | Funde dois registros da mesma pessoa |
 | `GET /grafo/{id}?profundidade=&peso_minimo=` | Nós e arestas com evidências |
 | `POST /grafo/relacao` | Cria conexão manual (justificativa obrigatória) |
@@ -213,22 +227,24 @@ Documentação interativa em `/docs`. Contrato detalhado em [`frontend/CONTRATO_
 ## Estrutura de pastas
 
 ```
-CEO_Mais/
+Deeper/
 ├── README.md
+├── CLAUDE.md                       # instruções para o Claude Code
 ├── ROTEIRO_APRESENTACAO_FSB.md     # roteiro da apresentação
 ├── requirements.txt · alembic.ini · .env
 ├── app/
 │   ├── main.py                     # FastAPI + CORS
 │   ├── core/                       # config, db, security
-│   ├── api/                        # busca, perfil, grafo, job, sugestoes, acervo
+│   ├── api/                        # busca, perfil, grafo, job, sugestoes, acervo, foto
 │   ├── models/                     # pessoa, empresa, cargo, relacao, alias, evento, mencao, job
 │   ├── schemas/
 │   ├── services/
-│   │   ├── collectors/             # serpapi_news, apify_linkedin, leitor_artigo
+│   │   ├── collectors/             # serpapi_news, apify_linkedin, leitor_artigo (ativos);
+│   │   │                           # b3, crunchbase, gdelt, receita (esboços do roadmap)
 │   │   ├── llm/                    # extrator, sintetizador
 │   │   ├── graph/                  # construtor, queries, inferidor_formal
 │   │   ├── manutencao.py           # fusão, exclusão, aliases
-│   │   ├── fotos.py                # cópia local da foto (URL do LinkedIn expira)
+│   │   ├── fotos.py                # cópia local da foto + fallback pela imprensa
 │   │   └── cache.py
 │   └── workers/busca_worker.py     # pipeline completo
 ├── frontend/
@@ -237,7 +253,7 @@ CEO_Mais/
 │   └── exemplo_*.json
 ├── migrations/versions/            # 7 migrations
 ├── scripts/                        # checar_ambiente.py, rodar_worker.py
-└── tests/                          # 137 testes
+└── tests/                          # 157 testes
 ```
 
 ---
@@ -274,25 +290,25 @@ Abra `frontend/index_v2.html` direto no navegador — o CORS está liberado para
 
 ## Regras de operação
 
-- **Mudou código do worker → reinicie o worker.** O `--reload` do uvicorn só cobre a API.
+- **Mudou código do worker → incremente `PIPELINE_VERSAO` e reinicie o worker.** O `--reload` do uvicorn só cobre a API.
 - **Um worker por vez.** Workers esquecidos em outros terminais disputam a fila e processam com código velho. O worker loga `pipeline vAAAA-MM-DD.N` no startup e em cada job — se a versão não bater, há processo antigo vivo.
 - **Redis parado?** No Windows: `Start-Service Memurai` como administrador.
-- **Testes:** `pytest` — 137 testes com SQLite em memória e mocks; não gastam API nem exigem Postgres/Redis.
+- **Testes:** `pytest` — 157 testes com SQLite em memória e mocks; não gastam API nem exigem Postgres/Redis.
 
 ---
 
 ## Custos
 
-**Por dossiê novo: ≈ US$ 0,20** (cerca de R$ 1,00–1,20).
+**Por dossiê novo: ≈ US$ 0,25–0,30** (cerca de R$ 1,40–1,70). Estimativa: subiu com o teto de extração de 20 para 30 matérias e com a busca de foto na imprensa.
 
 | Item | Custo |
 |---|---|
 | Perfil do LinkedIn (Apify) | US$ 0,005 |
-| IA — ~20 extrações + 1 síntese | ~US$ 0,17 |
-| Buscas (SerpAPI) | ~US$ 0,03 |
+| IA — até 30 extrações + 1 síntese | ~US$ 0,20–0,25 |
+| Buscas (SerpAPI) — 1 a 4 por dossiê (sugestões, Google Notícias, complemento, foto) | ~US$ 0,03–0,06 |
 | Dossiê já no acervo (cache 7 dias) | **zero** |
 
-**Mensal em escala de equipe:** ≈ US$ 125–235 (SerpAPI ~75, Anthropic 20–60, Apify 10–49, servidor 20–50). O gargalo hoje não é dinheiro, é cota: o plano gratuito do SerpAPI (250 buscas/mês) banca ~100 pesquisas novas.
+**Mensal em escala de equipe:** ≈ US$ 125–235 (SerpAPI ~75, Anthropic 20–60, Apify 10–49, servidor 20–50). O gargalo hoje não é dinheiro, é cota: o plano gratuito do SerpAPI (250 buscas/mês) banca de ~60 a ~100 pesquisas novas.
 
 ---
 
@@ -324,7 +340,7 @@ Abra `frontend/index_v2.html` direto no navegador — o CORS está liberado para
 2. **Sem autenticação.** Qualquer pessoa com acesso à rede acessaria.
 3. **Não monitora.** É fotografia sob demanda, não vigilância contínua com alertas.
 4. **Não exporta.** Dá para copiar o briefing; não há PDF/DOCX.
-5. **Cobertura nacional.** 10 portais brasileiros — executivo internacional rende pouco.
+5. **Cobertura nacional.** Google Notícias em português/Brasil + 10 portais — executivo internacional rende pouco.
 6. **A rede começa rala.** O grafo engorda conforme a equipe pesquisa.
 7. **Briefing gerado por IA.** Tem fonte e a arquitetura reduz muito o risco, mas **recomenda-se revisão humana antes de uso externo**.
 8. **Identidade é o nome.** Dois homônimos reais colidem no mesmo registro; mitigado por confirmação humana e fusão, não resolvido na raiz.
@@ -349,4 +365,4 @@ Abra `frontend/index_v2.html` direto no navegador — o CORS está liberado para
 
 ---
 
-**Projeto desenvolvido por Erik Rolin (FGV ECMI — Comunicação) para a FSB Holding.**
+**Projeto desenvolvido por Erik Rolin (FGV Comunicação) para a FSB Holding.**
